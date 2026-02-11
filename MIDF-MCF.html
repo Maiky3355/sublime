@@ -1,197 +1,257 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>MIDF–MCF ENGINE V5.0 INDUSTRIAL</title>
+<title>MIDF–MCF Ingeniería | Consola Profesional</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-body{font-family:Arial;background:#f3f4f6;margin:0;display:flex;height:100vh}
-.sidebar{width:420px;background:white;padding:20px;overflow:auto;border-right:2px solid #ddd}
-.main{flex:1;padding:25px;overflow:auto}
-input,button{width:100%;padding:6px;margin-bottom:8px}
-button{background:#1e3a8a;color:white;border:none}
-.status{padding:4px 10px;border-radius:15px;font-size:11px;font-weight:bold}
-.green{background:#dcfce7;color:#166534}
-.yellow{background:#fef9c3;color:#92400e}
-.orange{background:#fed7aa;color:#9a3412}
+body{font-family:Segoe UI;background:#f4f6f9;margin:0;display:flex;height:100vh}
+.sidebar{width:420px;background:#fff;padding:20px;overflow:auto;border-right:2px solid #ddd}
+.main{flex:1;padding:30px;overflow:auto}
+h2{font-size:14px;color:#1e3a8a;border-bottom:1px solid #ddd;padding-bottom:6px}
+input,select{width:100%;padding:8px;margin-bottom:10px;border:1px solid #ccc;border-radius:6px}
+button{padding:10px;width:100%;border:none;border-radius:6px;font-weight:bold;cursor:pointer}
+.btn{background:#1e3a8a;color:white}
+.badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:bold}
+.green{background:#dcfce7;color:#065f46}
+.yellow{background:#fef3c7;color:#92400e}
 .red{background:#fee2e2;color:#991b1b}
-.dark{background:#7f1d1d;color:white}
-table{width:100%;border-collapse:collapse}
-td,th{padding:6px;border-bottom:1px solid #ddd;font-size:12px}
+table{width:100%;border-collapse:collapse;background:#fff}
+th,td{padding:10px;border-bottom:1px solid #eee;font-size:13px}
+.small{font-size:12px;color:#555}
+.dynamic-row{display:flex;gap:5px;margin-bottom:5px}
+.dynamic-row input{flex:1}
 </style>
 </head>
 <body>
 
 <div class="sidebar">
 
-<h3>Subsistema</h3>
-<input id="name" placeholder="Nombre">
-<input type="number" id="life" value="30000" placeholder="Vida nominal">
-<input type="number" id="weight" value="10" placeholder="Peso criticidad">
+<h2>1. Subsistema</h2>
+<input id="name" placeholder="Nombre subsistema">
+<input id="life" type="number" placeholder="Vida nominal (horas)">
+<input id="weight" type="number" placeholder="Criticidad (peso)">
 
-<h3>Variables Base</h3>
-<input type="number" id="refLoad" value="100" placeholder="Carga diseño">
-<input type="number" id="realLoad" value="110" placeholder="Carga real">
-<input type="number" step="0.1" id="env" value="1.0" placeholder="E">
-<input type="number" step="0.1" id="pres" value="1.0" placeholder="P">
-<input type="number" step="0.1" id="grav" value="1.0" placeholder="G">
-<input type="number" step="0.1" id="surf" value="1.0" placeholder="S">
-<input type="number" step="0.1" id="mcf" value="1.0" placeholder="C">
+<h2>2. Fecha medición</h2>
+<input id="datetime" type="datetime-local">
 
-<h3>Factores dinámicos</h3>
-<div id="factors"></div>
-<button onclick="addFactor()">+ Factor</button>
+<h2>3. Factores base MIDF</h2>
+<input id="ref_load" type="number" placeholder="Carga diseño">
+<input id="real_load" type="number" placeholder="Carga real">
+<input id="env" type="number" step="0.01" placeholder="E (ambiente)">
+<input id="pres" type="number" step="0.01" placeholder="P (presión)">
+<input id="grav" type="number" step="0.01" placeholder="G (gravedad)">
+<input id="surf" type="number" step="0.01" placeholder="S (superficie)">
+<input id="mcf" type="number" step="0.01" placeholder="C (MCF)">
 
-<input type="number" id="dt" value="1000" placeholder="Δt horas">
-<button onclick="calculate()">Calcular</button>
-<button onclick="exportJSON()">Export JSON</button>
+<h2>4. Factores degradantes dinámicos</h2>
+<div id="dynamicFactors"></div>
+<button onclick="addFactor()">+ Agregar Factor</button>
+
+<br><br>
+<button class="btn" onclick="processData()">PROCESAR</button>
+<br><br>
+<button onclick="exportJSON()">Exportar JSON</button>
 
 </div>
 
 <div class="main">
 
-<h2>D_sys: <span id="dsys">0</span></h2>
-<h3>Subsistema crítico: <span id="critical"></span></h3>
+<h1>D_sys: <span id="dsys">0.0000</span></h1>
+<div id="globalStatus"></div>
 
+<h2>Estado Subsistemas</h2>
 <table>
 <thead>
 <tr>
-<th>Nombre</th>
-<th>D</th>
+<th>Subsistema</th>
+<th>D_i</th>
 <th>λ</th>
-<th>TTF P50</th>
-<th>TTF P10</th>
-<th>TTF P90</th>
+<th>Vida restante (h)</th>
 <th>Estado</th>
 </tr>
 </thead>
-<tbody id="table"></tbody>
+<tbody id="tableBody"></tbody>
 </table>
 
+<h2>Evolución Temporal</h2>
 <canvas id="chart"></canvas>
+
+<h2>Historial</h2>
+<select id="historySelect" onchange="loadHistory()"></select>
+<div id="historyBox" class="small"></div>
 
 </div>
 
 <script>
 
-let db=[];
+let db = JSON.parse(localStorage.getItem("midf_db")) || [];
 let chart;
 
 function addFactor(){
-    const div=document.createElement("div");
-    div.innerHTML=`<input class="fname" placeholder="Nombre factor">
-                   <input type="number" step="0.1" class="fval" value="1.0">`;
-    document.getElementById("factors").appendChild(div);
+    const container=document.getElementById("dynamicFactors");
+    const row=document.createElement("div");
+    row.className="dynamic-row";
+    row.innerHTML=`
+        <input placeholder="Nombre factor">
+        <input type="number" step="0.01" placeholder="Valor">
+    `;
+    container.appendChild(row);
 }
 
-function status(d){
-if(d<0.4) return ["OPERATIVO","green"];
-if(d<0.7) return ["ALERTA","yellow"];
-if(d<1.0) return ["CRITICO","orange"];
-if(d<1.5) return ["FALLA","red"];
-return ["CATASTROFICO","dark"];
-}
+function processData(){
 
-function calculate(){
+    const name=document.getElementById("name").value;
+    const life=parseFloat(document.getElementById("life").value);
+    const weight=parseFloat(document.getElementById("weight").value);
+    const dtInput=document.getElementById("datetime").value;
 
-let name=document.getElementById("name").value;
-let life=1/parseFloat(document.getElementById("life").value);
-let weight=parseFloat(document.getElementById("weight").value);
+    const ref=parseFloat(document.getElementById("ref_load").value);
+    const real=parseFloat(document.getElementById("real_load").value);
 
-let L=parseFloat(document.getElementById("realLoad").value)/
-      parseFloat(document.getElementById("refLoad").value);
-let E=parseFloat(document.getElementById("env").value);
-let P=parseFloat(document.getElementById("pres").value);
-let G=parseFloat(document.getElementById("grav").value);
-let S=parseFloat(document.getElementById("surf").value);
-let C=parseFloat(document.getElementById("mcf").value);
+    const L=real/ref;
+    const E=parseFloat(document.getElementById("env").value)||1;
+    const P=parseFloat(document.getElementById("pres").value)||1;
+    const G=parseFloat(document.getElementById("grav").value)||1;
+    const S=parseFloat(document.getElementById("surf").value)||1;
+    const C=parseFloat(document.getElementById("mcf").value)||1;
 
-let F=1;
-let fn=document.querySelectorAll(".fname");
-let fv=document.querySelectorAll(".fval");
-let factors=[];
+    const lambdaBase=1/life;
 
-fn.forEach((n,i)=>{
-let v=parseFloat(fv[i].value);
-F*=v;
-factors.push({name:n.value,value:v});
-});
+    let Fk=1;
+    let factorData={};
+    document.querySelectorAll("#dynamicFactors .dynamic-row").forEach(r=>{
+        const fname=r.children[0].value;
+        const fval=parseFloat(r.children[1].value)||1;
+        if(fname){
+            Fk*=fval;
+            factorData[fname]=fval;
+        }
+    });
 
-let lambda=life*L*E*P*G*S*C*F;
-let dt=parseFloat(document.getElementById("dt").value);
+    const lambda=lambdaBase*L*E*P*G*S*C*Fk;
 
-let sub=db.find(x=>x.name===name);
-if(!sub){
-sub={name:name,d:0,weight:weight,history:[]};
-db.push(sub);
-}
+    let sub=db.find(s=>s.name===name);
+    const now=new Date(dtInput);
 
-sub.d+=lambda*dt;
-sub.lambda=lambda;
-sub.ttf50=(1-sub.d)/lambda;
-sub.ttf10=(1-sub.d)/(lambda*1.15);
-sub.ttf90=(1-sub.d)/(lambda*0.85);
-sub.history.push(sub.d);
+    if(!sub){
+        sub={name,weight,history:[],D:0};
+        db.push(sub);
+    }
 
-render();
+    let lastDate=sub.history.length? new Date(sub.history[sub.history.length-1].date):now;
+    let deltaH=(now-lastDate)/3600000;
+    if(deltaH<0) deltaH=0;
+
+    sub.D+=lambda*deltaH;
+
+    let vidaRest=(1-sub.D)/lambda;
+    if(sub.D>1) vidaRest=-(sub.D-1)/lambda;
+
+    sub.history.push({
+        date:dtInput,
+        lambda,
+        D:sub.D,
+        lifeRemaining:vidaRest,
+        factors:{L,E,P,G,S,C,...factorData}
+    });
+
+    localStorage.setItem("midf_db",JSON.stringify(db));
+
+    render();
 }
 
 function render(){
 
-let table=document.getElementById("table");
-table.innerHTML="";
-let totalWeight=db.reduce((a,b)=>a+b.weight,0);
-let dsys=0;
-let criticalSub="";
-let minTTF=Infinity;
+    const body=document.getElementById("tableBody");
+    body.innerHTML="";
+    let totalW=db.reduce((a,b)=>a+b.weight,0);
+    let Dsys=0;
 
-db.forEach(s=>{
-dsys+=s.d*(s.weight/totalWeight);
+    db.forEach(s=>{
+        let last=s.history[s.history.length-1];
+        let pond=s.weight/totalW;
+        Dsys+=s.D*pond;
 
-if(s.ttf50<minTTF){minTTF=s.ttf50;criticalSub=s.name;}
+        let stateClass="green";
+        let stateText="OPERATIVO";
 
-let st=status(s.d);
+        if(s.D>=1){stateClass="red";stateText="FALLA FUNCIONAL";}
+        else if(s.D>=0.7){stateClass="yellow";stateText="CRÍTICO";}
 
-table.innerHTML+=`
-<tr>
-<td>${s.name}</td>
-<td>${s.d.toFixed(3)}</td>
-<td>${s.lambda.toExponential(2)}</td>
-<td>${Math.round(s.ttf50)}</td>
-<td>${Math.round(s.ttf10)}</td>
-<td>${Math.round(s.ttf90)}</td>
-<td><span class="status ${st[1]}">${st[0]}</span></td>
-</tr>`;
-});
+        body.innerHTML+=`
+        <tr>
+        <td>${s.name}</td>
+        <td>${s.D.toFixed(4)}</td>
+        <td>${last.lambda.toExponential(3)}</td>
+        <td>${Math.round(last.lifeRemaining)}</td>
+        <td><span class="badge ${stateClass}">${stateText}</span></td>
+        </tr>
+        `;
+    });
 
-document.getElementById("dsys").innerText=dsys.toFixed(3);
-document.getElementById("critical").innerText=criticalSub;
+    document.getElementById("dsys").innerText=Dsys.toFixed(4);
 
-renderChart();
+    renderChart();
+    loadHistorySelect();
 }
 
 function renderChart(){
-const ctx=document.getElementById("chart").getContext("2d");
-if(chart) chart.destroy();
+    const ctx=document.getElementById("chart");
+    if(chart) chart.destroy();
 
-chart=new Chart(ctx,{
-type:'line',
-data:{
-labels:Array.from({length:db[0]?.history.length||0},(_,i)=>i),
-datasets:db.map(s=>({label:s.name,data:s.history,fill:false}))
+    let labels=[];
+    let data=[];
+    if(db.length){
+        let sub=db[0];
+        sub.history.forEach(h=>{
+            labels.push(h.date);
+            data.push(h.D);
+        });
+    }
+
+    chart=new Chart(ctx,{
+        type:'line',
+        data:{
+            labels,
+            datasets:[{
+                label:'D_i',
+                data,
+                borderColor:'red',
+                fill:false
+            }]
+        }
+    });
 }
-});
+
+function loadHistorySelect(){
+    const sel=document.getElementById("historySelect");
+    sel.innerHTML="";
+    db.forEach((s,i)=>{
+        sel.innerHTML+=`<option value="${i}">${s.name}</option>`;
+    });
+}
+
+function loadHistory(){
+    const index=document.getElementById("historySelect").value;
+    const box=document.getElementById("historyBox");
+    if(db[index]){
+        box.innerHTML=db[index].history.map(h=>
+            `${h.date} | D=${h.D.toFixed(3)} | λ=${h.lambda.toExponential(2)} | Vida=${Math.round(h.lifeRemaining)}h`
+        ).join("<br>");
+    }
 }
 
 function exportJSON(){
-let data="data:text/json;charset=utf-8,"+
-encodeURIComponent(JSON.stringify(db,null,2));
-let a=document.createElement("a");
-a.href=data;
-a.download="midf_mcf_v5_log.json";
-a.click();
+    const dataStr="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(db,null,2));
+    const a=document.createElement('a');
+    a.href=dataStr;
+    a.download="midf_mcf_historial.json";
+    a.click();
 }
+
+render();
 
 </script>
 </body>
-  </html>
+</html>

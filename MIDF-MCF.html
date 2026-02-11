@@ -82,4 +82,164 @@ canvas{background:white;padding:15px;border-radius:10px;margin-top:20px}
 <input id="Cdyn" type="number">
 
 <label>Carga Equivalente P (kN)</label>
-<input id="Pdyn
+<input id="Pdyn" type="number">
+
+<label>Exponente p (3 bolas / 10/3 rodillos)</label>
+<input id="pExp" type="number" value="3">
+
+<button onclick="process()">Procesar Datos</button>
+
+</div>
+
+<div class="main">
+
+<h1>D_sys: <span id="dsys">0.0000</span></h1>
+<div id="globalStatus" class="statusBox">Sistema esperando datos</div>
+
+<table>
+<thead>
+<tr>
+<th>Subsistema</th>
+<th>D_i</th>
+<th>λ</th>
+<th>TTF (h)</th>
+<th>Driver</th>
+<th>Estado</th>
+</tr>
+</thead>
+<tbody id="table"></tbody>
+</table>
+
+<canvas id="chartDegrad"></canvas>
+
+</div>
+
+<script>
+
+let db=[];
+let timeGlobal=0;
+
+const ctx=document.getElementById('chartDegrad');
+const chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[]}});
+
+function process(){
+
+const name=document.getElementById("name").value;
+if(!name){alert("Debe ingresar nombre del subsistema");return;}
+
+let life=parseFloat(lifeVal());
+if(life<=0){alert("Vida nominal inválida");return;}
+
+let weight=val("weight");
+let dt=val("dt");
+timeGlobal+=dt;
+
+let design=val("designLoad");
+let real=val("realLoad");
+if(design<=0){alert("Carga diseño inválida");return;}
+
+let L=real/design;
+
+if(sel("signal")==="rms") L=Math.sqrt(L);
+if(sel("signal")==="peak") L=L*1.15;
+
+let E=val("env");
+let P=val("pressure");
+let G=val("gravity");
+let S=val("surface");
+let UV=val("uv");
+let C=val("mcf");
+
+E*=UV;
+
+let lambda_base=1/life;
+
+if(val("Cdyn")>0 && val("Pdyn")>0){
+let L10=Math.pow(val("Cdyn")/val("Pdyn"),val("pExp"));
+lambda_base=1/L10;
+}
+
+let lambda=lambda_base*L*E*P*G*S*C;
+
+let sub=db.find(x=>x.name===name);
+if(!sub){
+sub={name:name,d:0,weight:weight,history:[]};
+db.push(sub);
+}
+
+sub.d+=lambda*dt;
+if(sub.d>1) sub.d=1;
+
+sub.lambda=lambda;
+sub.ttf=lambda>0?(1-sub.d)/lambda:Infinity;
+
+let factors={Carga:L,Ambiente:E,Presion:P,Gravedad:G,Superficie:S};
+sub.driver=Object.keys(factors).reduce((a,b)=>factors[a]>factors[b]?a:b);
+
+sub.history.push({t:timeGlobal,d:sub.d});
+
+render();
+updateChart();
+}
+
+function render(){
+let totalW=db.reduce((a,b)=>a+b.weight,0);
+let dSys=0;
+let tbody=document.getElementById("table");
+tbody.innerHTML="";
+
+db.forEach(s=>{
+let w=s.weight/totalW;
+dSys+=s.d*w;
+
+let state="green";
+let label="OPERATIVO";
+
+if(s.d>=0.4 && s.d<0.7){state="yellow";label="ALERTA";}
+if(s.d>=0.7){state="red";label="CRÍTICO";}
+
+tbody.innerHTML+=`
+<tr class="${state}">
+<td>${s.name}</td>
+<td>${s.d.toFixed(4)}</td>
+<td>${s.lambda.toExponential(2)}</td>
+<td>${Math.round(s.ttf)}</td>
+<td>${s.driver}</td>
+<td>${label}</td>
+</tr>
+`;
+});
+
+document.getElementById("dsys").innerText=dSys.toFixed(4);
+
+let gStatus=document.getElementById("globalStatus");
+
+if(dSys<0.3){gStatus.innerText="Sistema Operativo";gStatus.className="statusBox green";}
+else if(dSys<0.7){gStatus.innerText="Sistema en Alerta";gStatus.className="statusBox yellow";}
+else{gStatus.innerText="Sistema en Falla Inminente";gStatus.className="statusBox red";}
+}
+
+function updateChart(){
+chart.data.labels=[];
+chart.data.datasets=[];
+
+db.forEach(s=>{
+chart.data.datasets.push({
+label:s.name,
+data:s.history.map(x=>x.d),
+fill:false
+});
+chart.data.labels=s.history.map(x=>x.t);
+});
+
+chart.update();
+}
+
+function val(id){return parseFloat(document.getElementById(id).value)||0;}
+function sel(id){return document.getElementById(id).value;}
+function lifeVal(){return document.getElementById("life").value;}
+
+</script>
+
+</body>
+</html>

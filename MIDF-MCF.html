@@ -1,165 +1,124 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>MIDF–MCF V4.1 | Engineering Console</title>
+<title>MIDF–MCF ENGINE V5.0 INDUSTRIAL</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <style>
-body{margin:0;font-family:Segoe UI;background:#f1f5f9;display:flex;height:100vh}
-.sidebar{width:440px;background:white;padding:20px;overflow:auto;border-right:2px solid #e2e8f0}
+body{font-family:Arial;background:#f3f4f6;margin:0;display:flex;height:100vh}
+.sidebar{width:420px;background:white;padding:20px;overflow:auto;border-right:2px solid #ddd}
 .main{flex:1;padding:25px;overflow:auto}
-h2{font-size:0.8rem;color:#1e3a8a;text-transform:uppercase;margin-top:25px}
-label{font-size:0.75rem;font-weight:700;color:#334155}
-input,select{width:100%;padding:8px;margin-bottom:10px;border:1px solid #cbd5e1;border-radius:6px}
-button{width:100%;padding:10px;border:none;border-radius:6px;background:#1e3a8a;color:white;font-weight:700;cursor:pointer;margin-top:10px}
-table{width:100%;border-collapse:collapse;background:white;margin-top:20px}
-th,td{padding:10px;border-bottom:1px solid #e2e8f0;font-size:0.85rem;text-align:center}
-.green{background:#dcfce7;color:#065f46;font-weight:700}
-.yellow{background:#fef9c3;color:#854d0e;font-weight:700}
-.red{background:#fee2e2;color:#991b1b;font-weight:700}
-canvas{background:white;padding:15px;border-radius:10px;margin-top:20px}
-.statusBox{padding:8px;border-radius:6px;font-weight:800}
+input,button{width:100%;padding:6px;margin-bottom:8px}
+button{background:#1e3a8a;color:white;border:none}
+.status{padding:4px 10px;border-radius:15px;font-size:11px;font-weight:bold}
+.green{background:#dcfce7;color:#166534}
+.yellow{background:#fef9c3;color:#92400e}
+.orange{background:#fed7aa;color:#9a3412}
+.red{background:#fee2e2;color:#991b1b}
+.dark{background:#7f1d1d;color:white}
+table{width:100%;border-collapse:collapse}
+td,th{padding:6px;border-bottom:1px solid #ddd;font-size:12px}
 </style>
 </head>
-
 <body>
 
 <div class="sidebar">
 
-<h2>1. Identificación del Subsistema</h2>
+<h3>Subsistema</h3>
+<input id="name" placeholder="Nombre">
+<input type="number" id="life" value="30000" placeholder="Vida nominal">
+<input type="number" id="weight" value="10" placeholder="Peso criticidad">
 
-<label>Nombre del Subsistema</label>
-<input id="name" placeholder="Ej: Rodamiento Lado Motor">
+<h3>Variables Base</h3>
+<input type="number" id="refLoad" value="100" placeholder="Carga diseño">
+<input type="number" id="realLoad" value="110" placeholder="Carga real">
+<input type="number" step="0.1" id="env" value="1.0" placeholder="E">
+<input type="number" step="0.1" id="pres" value="1.0" placeholder="P">
+<input type="number" step="0.1" id="grav" value="1.0" placeholder="G">
+<input type="number" step="0.1" id="surf" value="1.0" placeholder="S">
+<input type="number" step="0.1" id="mcf" value="1.0" placeholder="C">
 
-<label>Vida Nominal de Diseño (horas)</label>
-<input id="life" type="number" value="25000">
+<h3>Factores dinámicos</h3>
+<div id="factors"></div>
+<button onclick="addFactor()">+ Factor</button>
 
-<label>Peso de Criticidad w_i (1–100)</label>
-<input id="weight" type="number" value="10">
-
-<h2>2. Carga Operativa</h2>
-
-<label>Carga de Diseño (misma unidad que real)</label>
-<input id="designLoad" type="number" value="100">
-
-<label>Carga Real Medida (sensor o cálculo)</label>
-<input id="realLoad" type="number" value="110">
-
-<label>Tipo de Tratamiento de Señal</label>
-<select id="signal">
-<option value="avg">Promedio</option>
-<option value="rms">RMS (vibración)</option>
-<option value="peak">Pico</option>
-</select>
-
-<h2>3. Factores Ambientales y Físicos</h2>
-
-<label>Factor Ambiental E (corrosión, polvo, humedad)</label>
-<input id="env" type="number" value="1" step="0.1">
-
-<label>Factor Presión P (si aplica hidráulica)</label>
-<input id="pressure" type="number" value="1" step="0.1">
-
-<label>Factor Gravedad G (si afecta tensiones)</label>
-<input id="gravity" type="number" value="1" step="0.1">
-
-<label>Superficie Activa S (0–1)</label>
-<input id="surface" type="number" value="1" step="0.1">
-
-<label>Factor Solar / UV (si aplica exteriores)</label>
-<input id="uv" type="number" value="1" step="0.1">
-
-<label>Factor MCF (Acción de Mantenimiento)</label>
-<input id="mcf" type="number" value="1" step="0.05">
-
-<label>Horas desde último registro (Δt)</label>
-<input id="dt" type="number" value="100">
-
-<h2>ISO 281 (Rodamientos - opcional)</h2>
-
-<label>Capacidad Dinámica C (kN)</label>
-<input id="Cdyn" type="number">
-
-<label>Carga Equivalente P (kN)</label>
-<input id="Pdyn" type="number">
-
-<label>Exponente p (3 bolas / 10/3 rodillos)</label>
-<input id="pExp" type="number" value="3">
-
-<button onclick="process()">Procesar Datos</button>
+<input type="number" id="dt" value="1000" placeholder="Δt horas">
+<button onclick="calculate()">Calcular</button>
+<button onclick="exportJSON()">Export JSON</button>
 
 </div>
 
 <div class="main">
 
-<h1>D_sys: <span id="dsys">0.0000</span></h1>
-<div id="globalStatus" class="statusBox">Sistema esperando datos</div>
+<h2>D_sys: <span id="dsys">0</span></h2>
+<h3>Subsistema crítico: <span id="critical"></span></h3>
 
 <table>
 <thead>
 <tr>
-<th>Subsistema</th>
-<th>D_i</th>
+<th>Nombre</th>
+<th>D</th>
 <th>λ</th>
-<th>TTF (h)</th>
-<th>Driver</th>
+<th>TTF P50</th>
+<th>TTF P10</th>
+<th>TTF P90</th>
 <th>Estado</th>
 </tr>
 </thead>
 <tbody id="table"></tbody>
 </table>
 
-<canvas id="chartDegrad"></canvas>
+<canvas id="chart"></canvas>
 
 </div>
 
 <script>
 
 let db=[];
-let timeGlobal=0;
+let chart;
 
-const ctx=document.getElementById('chartDegrad');
-const chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[]}});
-
-function process(){
-
-const name=document.getElementById("name").value;
-if(!name){alert("Debe ingresar nombre del subsistema");return;}
-
-let life=parseFloat(lifeVal());
-if(life<=0){alert("Vida nominal inválida");return;}
-
-let weight=val("weight");
-let dt=val("dt");
-timeGlobal+=dt;
-
-let design=val("designLoad");
-let real=val("realLoad");
-if(design<=0){alert("Carga diseño inválida");return;}
-
-let L=real/design;
-
-if(sel("signal")==="rms") L=Math.sqrt(L);
-if(sel("signal")==="peak") L=L*1.15;
-
-let E=val("env");
-let P=val("pressure");
-let G=val("gravity");
-let S=val("surface");
-let UV=val("uv");
-let C=val("mcf");
-
-E*=UV;
-
-let lambda_base=1/life;
-
-if(val("Cdyn")>0 && val("Pdyn")>0){
-let L10=Math.pow(val("Cdyn")/val("Pdyn"),val("pExp"));
-lambda_base=1/L10;
+function addFactor(){
+    const div=document.createElement("div");
+    div.innerHTML=`<input class="fname" placeholder="Nombre factor">
+                   <input type="number" step="0.1" class="fval" value="1.0">`;
+    document.getElementById("factors").appendChild(div);
 }
 
-let lambda=lambda_base*L*E*P*G*S*C;
+function status(d){
+if(d<0.4) return ["OPERATIVO","green"];
+if(d<0.7) return ["ALERTA","yellow"];
+if(d<1.0) return ["CRITICO","orange"];
+if(d<1.5) return ["FALLA","red"];
+return ["CATASTROFICO","dark"];
+}
+
+function calculate(){
+
+let name=document.getElementById("name").value;
+let life=1/parseFloat(document.getElementById("life").value);
+let weight=parseFloat(document.getElementById("weight").value);
+
+let L=parseFloat(document.getElementById("realLoad").value)/
+      parseFloat(document.getElementById("refLoad").value);
+let E=parseFloat(document.getElementById("env").value);
+let P=parseFloat(document.getElementById("pres").value);
+let G=parseFloat(document.getElementById("grav").value);
+let S=parseFloat(document.getElementById("surf").value);
+let C=parseFloat(document.getElementById("mcf").value);
+
+let F=1;
+let fn=document.querySelectorAll(".fname");
+let fv=document.querySelectorAll(".fval");
+let factors=[];
+
+fn.forEach((n,i)=>{
+let v=parseFloat(fv[i].value);
+F*=v;
+factors.push({name:n.value,value:v});
+});
+
+let lambda=life*L*E*P*G*S*C*F;
+let dt=parseFloat(document.getElementById("dt").value);
 
 let sub=db.find(x=>x.name===name);
 if(!sub){
@@ -168,78 +127,71 @@ db.push(sub);
 }
 
 sub.d+=lambda*dt;
-if(sub.d>1) sub.d=1;
-
 sub.lambda=lambda;
-sub.ttf=lambda>0?(1-sub.d)/lambda:Infinity;
-
-let factors={Carga:L,Ambiente:E,Presion:P,Gravedad:G,Superficie:S};
-sub.driver=Object.keys(factors).reduce((a,b)=>factors[a]>factors[b]?a:b);
-
-sub.history.push({t:timeGlobal,d:sub.d});
+sub.ttf50=(1-sub.d)/lambda;
+sub.ttf10=(1-sub.d)/(lambda*1.15);
+sub.ttf90=(1-sub.d)/(lambda*0.85);
+sub.history.push(sub.d);
 
 render();
-updateChart();
 }
 
 function render(){
-let totalW=db.reduce((a,b)=>a+b.weight,0);
-let dSys=0;
-let tbody=document.getElementById("table");
-tbody.innerHTML="";
+
+let table=document.getElementById("table");
+table.innerHTML="";
+let totalWeight=db.reduce((a,b)=>a+b.weight,0);
+let dsys=0;
+let criticalSub="";
+let minTTF=Infinity;
 
 db.forEach(s=>{
-let w=s.weight/totalW;
-dSys+=s.d*w;
+dsys+=s.d*(s.weight/totalWeight);
 
-let state="green";
-let label="OPERATIVO";
+if(s.ttf50<minTTF){minTTF=s.ttf50;criticalSub=s.name;}
 
-if(s.d>=0.4 && s.d<0.7){state="yellow";label="ALERTA";}
-if(s.d>=0.7){state="red";label="CRÍTICO";}
+let st=status(s.d);
 
-tbody.innerHTML+=`
-<tr class="${state}">
+table.innerHTML+=`
+<tr>
 <td>${s.name}</td>
-<td>${s.d.toFixed(4)}</td>
+<td>${s.d.toFixed(3)}</td>
 <td>${s.lambda.toExponential(2)}</td>
-<td>${Math.round(s.ttf)}</td>
-<td>${s.driver}</td>
-<td>${label}</td>
-</tr>
-`;
+<td>${Math.round(s.ttf50)}</td>
+<td>${Math.round(s.ttf10)}</td>
+<td>${Math.round(s.ttf90)}</td>
+<td><span class="status ${st[1]}">${st[0]}</span></td>
+</tr>`;
 });
 
-document.getElementById("dsys").innerText=dSys.toFixed(4);
+document.getElementById("dsys").innerText=dsys.toFixed(3);
+document.getElementById("critical").innerText=criticalSub;
 
-let gStatus=document.getElementById("globalStatus");
-
-if(dSys<0.3){gStatus.innerText="Sistema Operativo";gStatus.className="statusBox green";}
-else if(dSys<0.7){gStatus.innerText="Sistema en Alerta";gStatus.className="statusBox yellow";}
-else{gStatus.innerText="Sistema en Falla Inminente";gStatus.className="statusBox red";}
+renderChart();
 }
 
-function updateChart(){
-chart.data.labels=[];
-chart.data.datasets=[];
+function renderChart(){
+const ctx=document.getElementById("chart").getContext("2d");
+if(chart) chart.destroy();
 
-db.forEach(s=>{
-chart.data.datasets.push({
-label:s.name,
-data:s.history.map(x=>x.d),
-fill:false
+chart=new Chart(ctx,{
+type:'line',
+data:{
+labels:Array.from({length:db[0]?.history.length||0},(_,i)=>i),
+datasets:db.map(s=>({label:s.name,data:s.history,fill:false}))
+}
 });
-chart.data.labels=s.history.map(x=>x.t);
-});
-
-chart.update();
 }
 
-function val(id){return parseFloat(document.getElementById(id).value)||0;}
-function sel(id){return document.getElementById(id).value;}
-function lifeVal(){return document.getElementById("life").value;}
+function exportJSON(){
+let data="data:text/json;charset=utf-8,"+
+encodeURIComponent(JSON.stringify(db,null,2));
+let a=document.createElement("a");
+a.href=data;
+a.download="midf_mcf_v5_log.json";
+a.click();
+}
 
 </script>
-
 </body>
-</html>
+  </html>

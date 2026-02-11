@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MIDF–MCF V4.0 Engineering Suite</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{margin:0;font-family:Segoe UI;background:#f1f5f9;display:flex;height:100vh}
+.sidebar{width:420px;background:white;padding:20px;overflow:auto;border-right:2px solid #e2e8f0}
+.main{flex:1;padding:25px;overflow:auto}
+h2{font-size:0.8rem;color:#1e3a8a;text-transform:uppercase}
+input,select{width:100%;padding:8px;margin-bottom:8px;border:1px solid #cbd5e1;border-radius:6px}
+button{width:100%;padding:10px;border:none;border-radius:6px;background:#1e3a8a;color:white;font-weight:700;cursor:pointer}
+table{width:100%;border-collapse:collapse;background:white;margin-top:20px}
+th,td{padding:8px;border-bottom:1px solid #e2e8f0;font-size:0.8rem}
+canvas{background:white;padding:15px;border-radius:10px;margin-top:20px}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+
+<h2>Subsistema</h2>
+<input id="name" placeholder="Ej: Rodamiento A">
+<input id="life" type="number" value="25000" placeholder="Vida nominal (h)">
+<input id="weight" type="number" value="10" placeholder="Peso criticidad">
+
+<h2>Operación</h2>
+<input id="designLoad" type="number" value="100" placeholder="Carga diseño">
+<input id="realLoad" type="number" value="110" placeholder="Carga real">
+<select id="signal">
+<option value="avg">Promedio</option>
+<option value="rms">RMS</option>
+<option value="peak">Pico</option>
+</select>
+
+<input id="env" type="number" value="1" step="0.1" placeholder="E">
+<input id="pressure" type="number" value="1" step="0.1" placeholder="P">
+<input id="gravity" type="number" value="1" step="0.1" placeholder="G">
+<input id="surface" type="number" value="1" step="0.1" placeholder="S">
+<input id="uv" type="number" value="1" step="0.1" placeholder="Factor UV opcional">
+<input id="mcf" type="number" value="1" step="0.05" placeholder="MCF (C)">
+<input id="dt" type="number" value="100" placeholder="Horas desde último registro">
+
+<h2>ISO 281 (opcional)</h2>
+<input id="Cdyn" type="number" placeholder="Capacidad dinámica C (kN)">
+<input id="Pdyn" type="number" placeholder="Carga equivalente P (kN)">
+<input id="pExp" type="number" value="3" placeholder="Exponente p (3 o 10/3)">
+
+<h2>Weibull (comparador)</h2>
+<input id="beta" type="number" value="2" step="0.1" placeholder="Beta">
+
+<button onclick="process()">Procesar</button>
+<button onclick="exportData()">Exportar JSON</button>
+
+</div>
+
+<div class="main">
+
+<h1>D_sys: <span id="dsys">0.0000</span></h1>
+
+<table>
+<thead>
+<tr>
+<th>Subsistema</th>
+<th>D_i</th>
+<th>λ</th>
+<th>TTF</th>
+<th>Driver</th>
+</tr>
+</thead>
+<tbody id="table"></tbody>
+</table>
+
+<canvas id="chartDegrad"></canvas>
+<canvas id="chartCompare"></canvas>
+
+</div>
+
+<script>
+
+let db=[];
+let timeGlobal=0;
+
+const ctx1=document.getElementById('chartDegrad');
+const chart1=new Chart(ctx1,{type:'line',data:{labels:[],datasets:[]}});
+
+const ctx2=document.getElementById('chartCompare');
+const chart2=new Chart(ctx2,{type:'bar',data:{labels:[],datasets:[{label:'D_i',data:[]} ]}});
+
+function process(){
+
+const name=nameField();
+const life=val("life");
+const weight=val("weight");
+const dt=val("dt");
+
+timeGlobal+=dt;
+
+let L=val("realLoad")/val("designLoad");
+
+if(sel("signal")==="rms") L=Math.sqrt(L);
+if(sel("signal")==="peak") L=L*1.1;
+
+let E=val("env");
+let P=val("pressure");
+let G=val("gravity");
+let S=val("surface");
+let UV=val("uv");
+let C=val("mcf");
+
+E*=UV;
+
+let lambda_base=1/life;
+
+/* ISO 281 ajuste */
+if(val("Cdyn") && val("Pdyn")){
+let L10=Math.pow(val("Cdyn")/val("Pdyn"),val("pExp"));
+lambda_base=1/(L10);
+}
+
+let lambda=lambda_base*L*E*P*G*S*C;
+
+let sub=db.find(x=>x.name===name);
+
+if(!sub){
+sub={name:name,d:0,weight:weight,history:[]};
+db.push(sub);
+}
+
+sub.d+=lambda*dt;
+if(sub.d>1) sub.d=1;
+
+sub.lambda=lambda;
+sub.ttf=lambda>0?(1-sub.d)/lambda:Infinity;
+
+let factors={L,E,P,G,S,C};
+sub.driver=Object.keys(factors).reduce((a,b)=>factors[a]>factors[b]?a:b);
+
+sub.history.push({t:timeGlobal,d:sub.d});
+
+render();
+updateCharts();
+}
+
+function render(){
+let totalW=db.reduce((a,b)=>a+b.weight,0);
+let dSys=0;
+
+const tbody=document.getElementById("table");
+tbody.innerHTML="";
+
+db.forEach(s=>{
+let w=s.weight/totalW;
+dSys+=s.d*w;
+tbody.innerHTML+=`
+<tr>
+<td>${s.name}</td>
+<td>${s.d.toFixed(4)}</td>
+<td>${s.lambda.toExponential(2)}</td>
+<td>${Math.round(s.ttf)}</td>
+<td>${s.driver}</td>
+</tr>
+`;
+});
+
+document.getElementById("dsys").innerText=dSys.toFixed(4);
+}
+
+function updateCharts(){
+
+chart1.data.labels=[];
+chart1.data.datasets=[];
+
+db.forEach((s,i)=>{
+chart1.data.datasets.push({
+label:s.name,
+data:s.history.map(x=>x.d),
+fill:false
+});
+chart1.data.labels=s.history.map(x=>x.t);
+});
+
+chart1.update();
+
+chart2.data.labels=db.map(s=>s.name);
+chart2.data.datasets[0].data=db.map(s=>s.d);
+chart2.update();
+}
+
+function exportData(){
+const data="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(db,null,2));
+const a=document.createElement("a");
+a.href=data;
+a.download="midf_v4_log.json";
+a.click();
+}
+
+function val(id){return parseFloat(document.getElementById(id).value)||0;}
+function sel(id){return document.getElementById(id).value;}
+function nameField(){return document.getElementById("name").value;}
+
+</script>
+
+</body>
+</html>

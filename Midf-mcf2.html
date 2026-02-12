@@ -2,324 +2,639 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>MIDF-MCF Framework Consolidado</title>
-
-<!--
-MIT License
-
-Copyright (c) 2026 Sebastián Manassero
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction...
--->
-
+<title>MIDF-MCF V9.3 – Motor Industrial Funcional</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <style>
-body{font-family:Arial;margin:20px;background:#f2f2f2}
-.sub{border:1px solid #bbb;padding:12px;margin-bottom:18px;background:white}
-.green{background:#d4edda}
-.yellow{background:#fff3cd}
-.red{background:#f8d7da}
-input,button{margin:3px}
-textarea{width:100%;height:110px}
-small{color:#555}
+body { font-family: Arial, sans-serif; margin:20px; background:#f8f9fa; color:#212529; }
+h2 { color:#0d6efd; }
+.section { border:1px solid #dee2e6; border-radius:6px; padding:15px; margin:15px 0; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+input, select, button { margin:4px 2px; padding:6px 10px; border-radius:4px; border:1px solid #ced4da; }
+button { background:#0d6efd; color:white; border:none; cursor:pointer; }
+button:hover { background:#0b5ed7; }
+.subsystem { border:1px solid #ced4da; border-radius:6px; padding:12px; margin:10px 0; background:#f8f9fa; }
+.green { background:#d4edda; border-color:#badbcc; }
+.yellow { background:#fff3cd; border-color:#ffecb5; }
+.red { background:#f8d7da; border-color:#f5c2c7; font-weight:bold; }
+.alert { color:#dc3545; font-weight:bold; }
+.weibull-benchmark { display:none; background:#f0f8ff; padding:10px; margin:10px 0; border-left:4px solid #0d6efd; border-radius:4px; }
+.benchmark-text { color:#0d6efd; font-style:italic; }
+.footer-notice { text-align:center; font-size:0.9em; color:#6c757d; margin-top:40px; padding:15px; border-top:1px solid #dee2e6; }
+#chartContainer { margin:25px 0; height:500px; border:1px solid #dee2e6; border-radius:6px; padding:15px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+#chartSelector { margin-bottom:12px; font-weight:bold; }
 </style>
 </head>
 <body>
 
-<h2>MIDF-MCF Framework – Versión Consolidada</h2>
+<h2>MIDF-MCF V9.3 – Motor Industrial de Degradación Paramétrica</h2>
 
+<div class="footer-notice">
+    <strong>Todos los derechos reservados © 2026 Sebastián Héctor Manassero (@SebasSublime)</strong><br>
+    Prohibida su copia, distribución, modificación o uso comercial sin autorización expresa.<br>
+    Para licencias comerciales o consultas: contactar vía X @SebasSublime.
+</div>
+
+<div class="section">
+<h3>Activo / Equipo / Planta</h3>
+<select id="activoSelector" onchange="cambiarActivo()">
+    <option value="equipo1">Equipo 1 - Bomba Principal</option>
+    <option value="equipo2">Equipo 2 - Motor Compresor</option>
+    <option value="equipo3">Equipo 3 - Turbina</option>
+</select>
+<button onclick="agregarActivo()">Agregar nuevo activo</button>
+</div>
+
+<div class="section">
 <h3>Configuración Global</h3>
-Umbral Amarillo:
-<input type="number" id="umbralA" value="0.7" step="0.01">
-Umbral Rojo:
-<input type="number" id="umbralR" value="1.0" step="0.01">
-Umbral Fallo Técnico:
-<input type="number" id="umbralFallo" value="1.0" step="0.01">
+Fecha medición: <input type="datetime-local" id="fecha" required><br>
+Umbral fallo: <input type="number" id="umbralFallo" value="1" step="0.01"><br>
+Modo integración:
+<select id="modoIntegracion">
+    <option value="promedio">Promedio (recomendado)</option>
+    <option value="final">Conservador (λ final)</option>
+    <option value="inicial">Histórico (λ inicial)</option>
+</select><br><br>
+λ_base global (fallback): <input type="number" id="lambdaBaseGlobal" step="0.00000001" value="0">
+</div>
 
-<hr>
+<div class="section">
+<h3>MCF Completa (global)</h3>
+Material: <input type="number" id="mcfMaterial" value="1" step="0.01"><br>
+Tratamiento: <input type="number" id="mcfTratamiento" value="1" step="0.01"><br>
+Proceso Fabricación: <input type="number" id="mcfProceso" value="1" step="0.01"><br>
+Confiabilidad estadística: <input type="number" id="mcfConfiabilidad" value="1" step="0.01"><br>
+Factor Lote: <input type="number" id="mcfLote" value="1" step="0.01"><br><br>
 
+Agregar factor MCF adicional:<br>
+<input type="text" id="mcfExtraNombre" placeholder="Nombre"> 
+<input type="number" id="mcfExtraValor" step="0.01" placeholder="Valor">
+<button onclick="agregarMCFExtra()">Agregar</button>
+<div id="mcfExtras"></div>
+</div>
+
+<div class="section">
+<h3>Subsistemas del Activo Seleccionado</h3>
+<div id="subsistemas"></div>
 <button onclick="agregarSubsistema()">Agregar Subsistema</button>
+</div>
+
+<button onclick="calcular()">Calcular</button>
 <button onclick="exportarJSON()">Exportar JSON</button>
 <button onclick="importarJSON()">Importar JSON</button>
 
-<div id="subsistemas"></div>
+<h3>Historial de mediciones</h3>
+<select id="historial" onchange="verHistorial()"></select>
+<div id="detalleHistorial"></div>
 
-<hr>
-<h3>Historial General</h3>
-<div id="historial"></div>
+<div id="chartContainer">
+    <div id="chartSelector">
+        Subsistema para graficar: 
+        <select id="subsystemChartSelector" onchange="renderChart()">
+            <option value="">Seleccionar subsistema</option>
+        </select>
+        <button onclick="exportChart()">Exportar gráfico como PNG</button>
+    </div>
+    <canvas id="degradationChart"></canvas>
+</div>
 
-<hr>
-<h3>Tratamiento de Datos Crudos de Planta</h3>
-<textarea id="datosCrudos" placeholder="Valores separados por coma o salto de línea"></textarea>
-<button onclick="procesarCrudos()">Procesar</button>
-<div id="resultadoCrudos"></div>
+<div id="resultados"></div>
 
 <script>
+// =============================================================================
+// MIDF-MCF v9.3 – Motor Industrial Funcional y Blindado
+// Autor: Sebastián Héctor Manassero (@SebasSublime)
+// Todos los derechos reservados. © 2026 Sebastián Héctor Manassero
+// Prohibida su copia, distribución, modificación o uso comercial sin autorización expresa.
+// =============================================================================
 
-let subsistemas=[]
-let historial=[]
+let activos = {
+    equipo1: { nombre: "Equipo 1 - Bomba Principal", subsistemas: [] },
+    equipo2: { nombre: "Equipo 2 - Motor Compresor", subsistemas: [] },
+    equipo3: { nombre: "Equipo 3 - Turbina", subsistemas: [] }
+};
+let activoActual = "equipo1";
+let mcfExtras = {};
+let historial = [];
+let chart = null;
+const MAX_HISTORIAL = 5000;
 
-function agregarSubsistema(){
-subsistemas.push({
-nombre:"Subsistema_"+subsistemas.length,
-D:0,
-lambdaAnterior:0,
-fechaAnterior:null,
-vidaFabricante:0,
-horasTrabajoDiarias:24,
-MCF:0,
-variables:[],
-extraInputs:{}
-})
-render()
-guardarLocal()
+function cambiarActivo(){
+    activoActual = document.getElementById("activoSelector").value;
+    renderSubsistemas();
+    actualizarHistorial();
+    actualizarSelectorGrafico();
 }
 
-function render(){
-let cont=document.getElementById("subsistemas")
-cont.innerHTML=""
-
-let umA=parseFloat(document.getElementById("umbralA").value)||0.7
-let umR=parseFloat(document.getElementById("umbralR").value)||1.0
-
-subsistemas.forEach((s,i)=>{
-
-let clase="green"
-if(s.D>=umA && s.D<umR) clase="yellow"
-if(s.D>=umR) clase="red"
-
-cont.innerHTML+=`
-<div class="sub ${clase}">
-<b><input value="${s.nombre}" 
-onchange="subsistemas[${i}].nombre=this.value;guardarLocal()"></b><br>
-
-Fecha (obligatoria):
-<input type="date" id="fecha${i}"><br>
-
-Carga Real:
-<input type="number" id="cargaReal${i}" step="0.01"><br>
-
-Carga Manual:
-<input type="number" id="cargaManual${i}" step="0.01"><br>
-
-Vida estimada fabricante (horas):
-<input type="number" id="vidaFab${i}" value="${s.vidaFabricante}"><br>
-
-Gravedad:
-<input type="checkbox" id="grav${i}">
-
-UV:
-<input type="checkbox" id="uv${i}"><br>
-
-Corrosión parcial (0 a 1):
-<input type="number" id="corr${i}" min="0" max="1" step="0.01"><br>
-
-MCF regenerativo (0 a 1):
-<input type="number" id="mcf${i}" step="0.01"><br>
-
-Horas de trabajo diarias:
-<input type="number" id="hDia${i}" value="${s.horasTrabajoDiarias}"><br>
-
-<button onclick="calcular(${i})">Calcular</button>
-
-<hr>
-
-D acumulado:
-<b>${s.D.toFixed(4)}</b><br>
-
-Horas restantes:
-<b>${horasRestantes(s)}</b><br>
-
-Días restantes:
-<b>${diasRestantes(s)}</b><br>
-
-<hr>
-Variables dinámicas MIDF:<br>
-<div id="vars${i}"></div>
-<button onclick="agregarVariable(${i})">Agregar Variable</button>
-
-</div>
-`
-renderVariables(i)
-})
+function agregarActivo(){
+    let nombre = prompt("Nombre del nuevo activo/equipo:");
+    if(!nombre) return;
+    let id = "equipo" + (Object.keys(activos).length + 1);
+    activos[id] = { nombre, subsistemas: [] };
+    let opt = document.createElement("option");
+    opt.value = id;
+    opt.text = nombre;
+    document.getElementById("activoSelector").appendChild(opt);
+    activoActual = id;
+    cambiarActivo();
 }
 
-function renderVariables(i){
-let div=document.getElementById("vars"+i)
-if(!div)return
-div.innerHTML=""
-subsistemas[i].variables.forEach((v,j)=>{
-div.innerHTML+=`
-<input placeholder="Nombre" value="${v.nombre}"
-onchange="subsistemas[${i}].variables[${j}].nombre=this.value">
-<input type="number" placeholder="Valor"
-value="${v.valor}" step="0.01"
-onchange="subsistemas[${i}].variables[${j}].valor=parseFloat(this.value)">
-<input type="number" placeholder="Peso λ"
-value="${v.peso}" step="0.01"
-onchange="subsistemas[${i}].variables[${j}].peso=parseFloat(this.value)">
-<br>`
-})
+function renderSubsistemas(){
+    let container = document.getElementById("subsistemas");
+    container.innerHTML = "";
+    let subs = activos[activoActual].subsistemas;
+    let umbral = parseFloat(document.getElementById("umbralFallo").value) || 1;
+    let lambdaGlobal = parseFloat(document.getElementById("lambdaBaseGlobal").value) || 0;
+
+    subs.forEach((s, i) => {
+        let colorClass = "green";
+        if (s.D >= umbral * 0.7 && s.D < umbral) colorClass = "yellow";
+        if (s.D >= umbral) colorClass = "red";
+        if (s.D > 5) colorClass = "red";
+
+        let weibullDisplay = s.mostrarWeibull ? "block" : "none";
+
+        container.innerHTML += `
+        <div class="subsystem ${colorClass}">
+            <b>Nombre:</b> <input value="\( {s.nombre}" onchange="activos[' \){activoActual}'].subsistemas[${i}].nombre=this.value"><br><br>
+
+            Vida estudio/teórica (h): <input type="number" id="vidaEstudio\( {i}" value=" \){s.vidaEstudio}" 
+                                             onchange="activos['\( {activoActual}'].subsistemas[ \){i}].vidaEstudio = parseFloat(this.value) || 0"><br>
+            <button onclick="recalibrarLambda(${i})">Recalibrar λ_base</button><br><br>
+
+            Modo carga:
+            <select id="modoCarga\( {i}" onchange="activos[' \){activoActual}'].subsistemas[${i}].modoCarga = this.value">
+                <option value="auto" ${s.modoCarga === "auto" ? 'selected' : ''}>Automática (real/nominal)</option>
+                <option value="manual" ${s.modoCarga === "manual" ? 'selected' : ''}>Manual (fijo)</option>
+            </select>
+            <div id="cargaManualDiv\( {i}" style="display: \){s.modoCarga === 'manual' ? 'block' : 'none'}; margin-top:6px;">
+                Factor carga manual: <input type="number" id="cargaManual\( {i}" step="0.01" value=" \){s.cargaManual || 1.0}" 
+                                            onchange="activos['\( {activoActual}'].subsistemas[ \){i}].cargaManual = parseFloat(this.value) || 1.0">
+            </div><br>
+
+            <label><input type="checkbox" id="weibullCheck${i}" ${s.mostrarWeibull ? 'checked' : ''} 
+                   onchange="activos['\( {activoActual}'].subsistemas[ \){i}].mostrarWeibull=this.checked; toggleWeibullFields(${i})">
+            Mostrar benchmark Weibull (referencia estadística)</label><br>
+
+            <div id="weibullFields\( {i}" class="weibull-benchmark" style="display: \){weibullDisplay};">
+                β (forma): <input type="number" id="beta\( {i}" step="0.01" value=" \){s.beta}" 
+                                  onchange="activos['\( {activoActual}'].subsistemas[ \){i}].beta = parseFloat(this.value) || 1"><br>
+                η (escala, horas): <input type="number" id="eta\( {i}" step="1" value=" \){s.eta}" 
+                                  onchange="activos['\( {activoActual}'].subsistemas[ \){i}].eta = parseFloat(this.value) || 100000"><br>
+            </div><br>
+
+            λ_base MIDF-MCF (exponencial): 
+            <input type="number" id="lambdaBase\( {i}" step="0.00000001" value=" \){s.lambdaBase}" 
+                   onchange="activos['\( {activoActual}'].subsistemas[ \){i}].lambdaBase = parseFloat(this.value) || 0"><br><br>
+
+            <h4>Medición actual</h4>
+            Carga real: <input type="number" id="cReal${i}" step="0.01"><br>
+            Carga nominal: <input type="number" id="cNom${i}" step="0.01"><br>
+            Temperatura (°C): <input type="number" id="temp${i}" value="25" step="1"><br>
+            Humedad (%): <input type="number" id="humedad${i}" value="50" step="1"><br>
+            Nivel polvo (1–3): <input type="number" id="polvo${i}" value="1" min="1" max="3" step="1"><br>
+            Nivel corrosión (0–1): <input type="number" id="corrosion${i}" value="0" step="0.1"><br>
+            UV aplica: <input type="checkbox" id="uvCheck${i}">
+            UV factor: <input type="number" id="UV${i}" value="1" step="0.01"><br>
+            Gravedad factor: <input type="number" id="Gv${i}" value="1" step="0.01"><br><br>
+
+            Agregar factor extra:<br>
+            <input type="text" id="extraNombre${i}" placeholder="Nombre">
+            <input type="number" id="extraValor${i}" step="0.01" placeholder="Valor">
+            <button onclick="agregarExtra(${i})">Agregar</button>
+            <div id="extras${i}"></div><br>
+
+            t acumulado (h): ${s.tAcumulado.toFixed(2)}<br>
+            D acumulado: ${s.D.toFixed(6)}
+        </div>`;
+        renderExtras(i);
+    });
+    actualizarSelectorGrafico();
 }
 
-function agregarVariable(i){
-subsistemas[i].variables.push({nombre:"var",valor:0,peso:0})
-render()
-guardarLocal()
+function toggleWeibullFields(i){
+    let fields = document.getElementById("weibullFields"+i);
+    let check = document.getElementById("weibullCheck"+i);
+    fields.style.display = check.checked ? "block" : "none";
 }
 
-function calcular(i){
-
-let s=subsistemas[i]
-let fecha=document.getElementById("fecha"+i).value
-if(!fecha){alert("Debe ingresar fecha");return}
-
-let cargaReal=parseFloat(document.getElementById("cargaReal"+i).value)||0
-let cargaManual=parseFloat(document.getElementById("cargaManual"+i).value)||0
-let gravedad=document.getElementById("grav"+i).checked?0.1:0
-let uv=document.getElementById("uv"+i).checked?0.1:0
-let corrosion=parseFloat(document.getElementById("corr"+i).value)||0
-let mcf=parseFloat(document.getElementById("mcf"+i).value)||0
-
-s.vidaFabricante=parseFloat(document.getElementById("vidaFab"+i).value)||0
-s.horasTrabajoDiarias=parseFloat(document.getElementById("hDia"+i).value)||24
-
-let lambda=0
-
-lambda+=cargaReal
-lambda+=cargaManual
-lambda+=gravedad
-lambda+=uv
-lambda+=corrosion
-
-s.variables.forEach(v=>{
-lambda+=(v.valor||0)*(v.peso||0)
-})
-
-let fechaActual=new Date(fecha)
-
-if(s.fechaAnterior){
-let deltaHoras=(fechaActual-new Date(s.fechaAnterior))/(1000*60*60)
-let lambdaProm=(s.lambdaAnterior+lambda)/2
-if(deltaHoras>0){
-s.D+=lambdaProm*deltaHoras
-}
+function agregarExtra(i){
+    let nombre = document.getElementById("extraNombre"+i).value.trim();
+    let valor = parseFloat(document.getElementById("extraValor"+i).value);
+    if(!nombre || isNaN(valor) || valor <= 0) return;
+    activos[activoActual].subsistemas[i].extras[nombre] = valor;
+    renderExtras(i);
+    renderSubsistemas();
 }
 
-if(mcf>0){
-s.D=s.D*(1-mcf)
+function renderExtras(i){
+    let div = document.getElementById("extras"+i);
+    if(!div) return;
+    div.innerHTML = Object.entries(activos[activoActual].subsistemas[i].extras).map(([k,v]) => `${k}: ${v}`).join("<br>");
 }
 
-s.lambdaAnterior=lambda
-s.fechaAnterior=fecha
-s.MCF=mcf
-
-historial.push({
-subsistema:s.nombre,
-fecha:fecha,
-D:s.D,
-lambda:lambda
-})
-
-render()
-actualizarHistorial()
-guardarLocal()
+function recalibrarLambda(i){
+    let s = activos[activoActual].subsistemas[i];
+    if (s.tAcumulado <= 0 || s.D <= 0) {
+        alert("No hay datos históricos suficientes para recalibrar.");
+        return;
+    }
+    let lambdaNuevo = s.D / s.tAcumulado;
+    s.lambdaBase = lambdaNuevo;
+    alert(`λ_base recalibrado a ${lambdaNuevo.toExponential(6)} (promedio histórico D/t).`);
+    renderSubsistemas();
 }
 
-function horasRestantes(s){
-let umbral=parseFloat(document.getElementById("umbralFallo").value)||1
-if(s.lambdaAnterior<=0)return "Estacionario"
-let restante=(umbral-s.D)/s.lambdaAnterior
-if(restante<0)return "Superado"
-return restante.toFixed(2)
+function calcularFactorClimatico(temp, humedad, polvo, corrosion){
+    let fTemp = 1 + 0.01 * (temp - 25);
+    let fHumedad = 1 + 0.005 * (humedad - 50);
+    let fPolvo = 1 + 0.2 * (polvo - 1);
+    let fCorrosion = 1 + 0.5 * corrosion;
+    let factor = fTemp * fHumedad * fPolvo * fCorrosion;
+    return Math.max(factor, 0.1);
 }
 
-function diasRestantes(s){
-let hr=parseFloat(horasRestantes(s))
-if(isNaN(hr))return "-"
-return (hr/(s.horasTrabajoDiarias||24)).toFixed(2)
+function calcular(){
+    let fechaStr = document.getElementById("fecha").value;
+    if(!fechaStr){ alert("Fecha obligatoria"); return; }
+    let fechaActual = new Date(fechaStr);
+
+    let lambdaGlobal = parseFloat(document.getElementById("lambdaBaseGlobal").value) || 0;
+    let umbral = parseFloat(document.getElementById("umbralFallo").value) || 1;
+    let modo = document.getElementById("modoIntegracion").value;
+
+    let mcfTotal = 
+        (parseFloat(document.getElementById("mcfMaterial").value)||1) *
+        (parseFloat(document.getElementById("mcfTratamiento").value)||1) *
+        (parseFloat(document.getElementById("mcfProceso").value)||1) *
+        (parseFloat(document.getElementById("mcfConfiabilidad").value)||1) *
+        (parseFloat(document.getElementById("mcfLote").value)||1);
+
+    Object.values(mcfExtras).forEach(v => mcfTotal *= v);
+
+    let salida = "";
+
+    let subs = activos[activoActual].subsistemas;
+    subs.forEach((s, i) => {
+        let lambdaBaseSub = parseFloat(document.getElementById("lambdaBase"+i).value) || 0;
+        let lambdaBase = (lambdaBaseSub > 0) ? lambdaBaseSub : lambdaGlobal;
+
+        let vidaEstudio = parseFloat(document.getElementById("vidaEstudio"+i).value) || 0;
+
+        let modoCarga = document.getElementById("modoCarga"+i).value;
+        let cargaManual = (modoCarga === "manual") ? parseFloat(document.getElementById("cargaManual"+i).value) || 1.0 : NaN;
+
+        let cReal = parseFloat(document.getElementById("cReal"+i).value) || 1;
+        let cNom  = parseFloat(document.getElementById("cNom"+i).value)  || 1;
+        if(cNom <= 0){ alert(`Carga nominal inválida en ${s.nombre}`); return; }
+
+        let factorCarga = (modoCarga === "manual") ? cargaManual : (cReal / cNom);
+
+        let temp = parseFloat(document.getElementById("temp"+i).value) || 25;
+        let humedad = parseFloat(document.getElementById("humedad"+i).value) || 50;
+        let polvo = parseFloat(document.getElementById("polvo"+i).value) || 1;
+        let corrosion = parseFloat(document.getElementById("corrosion"+i).value) || 0;
+
+        let factorClima = calcularFactorClimatico(temp, humedad, polvo, corrosion);
+
+        let E = factorClima;
+        let P  = 1;
+        let Gv = parseFloat(document.getElementById("Gv"+i).value) || 1;
+        let UV = document.getElementById("uvCheck"+i).checked ? (parseFloat(document.getElementById("UV"+i).value)||1) : 1;
+
+        let extrasTotal = Object.values(s.extras).reduce((a,b)=>a*b, 1);
+
+        let lambdaActual = lambdaBase * factorCarga * E * P * Gv * UV * extrasTotal * mcfTotal;
+
+        if (isNaN(lambdaActual) || !isFinite(lambdaActual) || lambdaActual < 0) {
+            alert(`λ inválido en ${s.nombre} – revisar factores.`);
+            lambdaActual = 0;
+        }
+
+        let incremento = 0;
+        if (s.fechaAnterior) {
+            let deltaH = (fechaActual - s.fechaAnterior) / (3600 * 1000);
+            if (deltaH < 0) { alert(`Fecha anterior inválida en ${s.nombre}`); return; }
+            if (deltaH === 0) { alert(`Medición duplicada en ${s.nombre}`); }
+            if (deltaH > 0) {
+                s.tAcumulado += deltaH;
+                if(modo === "final") incremento = lambdaActual * deltaH;
+                else if(modo === "inicial" && s.lambdaAnterior) incremento = s.lambdaAnterior * deltaH;
+                else if(modo === "promedio" && s.lambdaAnterior) incremento = ((s.lambdaAnterior + lambdaActual)/2) * deltaH;
+                s.D += incremento;
+            }
+        } else {
+            s.tAcumulado = 0;
+        }
+
+        s.lambdaAnterior = lambdaActual;
+        s.fechaAnterior  = fechaActual;
+
+        if (s.D > 5) alert(`D > 5 en ${s.nombre} – revisar factores.`);
+
+        let horasRestantes = (s.D >= umbral) ? 0 : (lambdaActual > 1e-10 ? (umbral - s.D) / lambdaActual : "Estacionario");
+
+        let R_midf = Math.exp(-s.D);
+        let confiabilidadPct = (R_midf * 100).toFixed(2);
+
+        let vidaMIDF = (lambdaActual > 0) ? (umbral - s.D) / lambdaActual : "N/A";
+        let comparacionVida = "";
+        if (vidaEstudio > 0 && typeof vidaMIDF === 'number') {
+            let ratio = vidaMIDF / vidaEstudio;
+            comparacionVida = `<br>Vida MIDF vs estudio: \( {ratio.toFixed(2)}× ( \){ratio < 1 ? 'menor' : 'mayor'})`;
+        }
+
+        let benchmarkWeibull = "";
+        if (s.mostrarWeibull) {
+            let beta = parseFloat(document.getElementById("beta"+i)?.value) || 1;
+            let eta  = parseFloat(document.getElementById("eta"+i)?.value)  || 100000;
+            if (beta > 0 && eta > 0) {
+                let R_weibull = Math.exp( -Math.pow(s.tAcumulado / eta, beta) );
+                let R_weibullPct = (R_weibull * 100).toFixed(2);
+                let vidaRestWeibull = calcularVidaRestanteWeibull(s.tAcumulado, eta, beta, umbral);
+                benchmarkWeibull = `
+                <br><span class="benchmark-text">Benchmark Weibull:</span><br>
+                <span class="benchmark-text">→ Confiabilidad: ${R_weibullPct}%</span><br>
+                <span class="benchmark-text">→ Vida restante teórica: ${vidaRestWeibull}</span>`;
+            }
+        }
+
+        let hrTxt = (typeof horasRestantes === 'number') ? horasRestantes.toFixed(1) + " h" : horasRestantes;
+        let advert = (s.D >= umbral) ? '<span class="alert"> → AGOTADO</span>' : '';
+        if (s.D > 5) advert += '<span class="alert"> → FUERA DE MODELO</span>';
+
+        let velocidadDegradacion = lambdaActual.toExponential(6);
+
+        salida += `
+        <div style="margin:8px 0;">
+            <b>\( {s.nombre}</b> \){advert}<br>
+            λ actual: ${lambdaActual.toExponential(6)}<br>
+            Velocidad degradación (dD/dt): ${velocidadDegradacion}<br>
+            Vida restante (MIDF-MCF): ${hrTxt}<br>
+            ${comparacionVida}<br>
+            D acumulado: ${s.D.toFixed(6)} / ${umbral}<br>
+            Confiabilidad MIDF-MCF: \( {confiabilidadPct} % \){benchmarkWeibull}<br>
+            t acumulado: ${s.tAcumulado.toFixed(2)} h<br>
+            Factor climático: ${factorClima.toFixed(2)}
+        </div><hr>`;
+
+        historial.push({
+            activo: activoActual,
+            fecha: fechaActual,
+            subsistema: s.nombre,
+            lambda: lambdaActual,
+            D: s.D,
+            tAcumulado: s.tAcumulado,
+            horasRestantes,
+            confiabilidadPct,
+            vidaEstudio,
+            factorClima,
+            modoCarga,
+            metodo: modo,
+            velocidadDegradacion: lambdaActual
+        });
+
+        if(historial.length > MAX_HISTORIAL) historial.shift();
+    });
+
+    document.getElementById("resultados").innerHTML = salida;
+    actualizarHistorial();
+    renderSubsistemas();
+    actualizarSelectorGrafico();
+    guardarLocal();
+}
+
+function calcularVidaRestanteWeibull(tActual, eta, beta, umbral){
+    if (beta <= 0 || eta <= 0) return "Inválido";
+    let R_crit = Math.exp(-umbral);
+    let t_crit = eta * Math.pow(-Math.log(R_crit), 1 / beta);
+    let t_rest = t_crit - tActual;
+    return (t_rest > 0) ? t_rest.toFixed(1) + " h (ref)" : "0 h (ref)";
+}
+
+function actualizarSelectorGrafico(){
+    let sel = document.getElementById("subsystemChartSelector");
+    sel.innerHTML = '<option value="">Seleccionar subsistema</option>';
+    let subs = activos[activoActual].subsistemas;
+    subs.forEach((s, i) => {
+        let opt = document.createElement("option");
+        opt.value = i;
+        opt.text = s.nombre;
+        sel.appendChild(opt);
+    });
+    if (sel.value === "" && subs.length > 0) {
+        sel.value = "0";
+        renderChart();
+    }
+}
+
+function renderChart(){
+    let idx = document.getElementById("subsystemChartSelector").value;
+    if (idx === "") return;
+
+    idx = parseInt(idx);
+    let s = activos[activoActual].subsistemas[idx];
+
+    let labels = [];
+    let dataD = [];
+    let dataR = [];
+
+    historial.filter(h => h.activo === activoActual && h.subsistema === s.nombre).forEach(h => {
+        labels.push(h.fecha.toLocaleString('es-AR'));
+        dataD.push(h.D);
+        if (s.mostrarWeibull) {
+            let R = Math.exp( -Math.pow(h.tAcumulado / s.eta, s.beta) );
+            dataR.push(R * 100);
+        }
+    });
+
+    if (chart) chart.destroy();
+
+    let ctx = document.getElementById("degradationChart").getContext("2d");
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Daño acumulado D(t)',
+                data: dataD,
+                borderColor: '#dc3545',
+                backgroundColor: 'rgba(220, 53, 69, 0.08)',
+                fill: true,
+                tension: 0.1,
+                pointRadius: 4,
+                pointHoverRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `${activos[activoActual].nombre} – ${s.nombre}`,
+                    font: { size: 18, weight: 'bold' },
+                    padding: { top: 10, bottom: 20 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y.toFixed(4)}`;
+                        }
+                    }
+                },
+                zoom: {
+                    zoom: {
+                        wheel: { enabled: true, speed: 0.1 },
+                        pinch: { enabled: true },
+                        mode: 'xy'
+                    },
+                    pan: { enabled: true, mode: 'xy' },
+                    limits: { x: { min: 'original', max: 'original' } }
+                }
+            },
+            scales: {
+                x: { 
+                    title: { display: true, text: 'Fecha / Hora' },
+                    ticks: { maxTicksLimit: 10 }
+                },
+                y: { 
+                    beginAtZero: true, 
+                    title: { display: true, text: 'Daño acumulado D' },
+                    suggestedMax: Math.max(...dataD, 1) * 1.2
+                }
+            }
+        }
+    });
+
+    if (s.mostrarWeibull && dataR.length > 0) {
+        chart.data.datasets.push({
+            label: 'Confiabilidad Weibull (%)',
+            data: dataR,
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13, 110, 253, 0.08)',
+            fill: true,
+            tension: 0.1,
+            pointRadius: 4,
+            pointHoverRadius: 8,
+            yAxisID: 'y1'
+        });
+        chart.options.scales.y1 = {
+            type: 'linear',
+            position: 'right',
+            beginAtZero: true,
+            max: 100,
+            title: { display: true, text: 'R_weibull (%)' },
+            grid: { drawOnChartArea: false }
+        };
+        chart.update();
+    }
+}
+
+function exportChart(){
+    if (!chart) return alert("No hay gráfico para exportar.");
+    let link = document.createElement('a');
+    link.href = chart.toBase64Image('image/png', 1.0);
+    link.download = `grafico_\( {activoActual.replace(/ /g,'_')}_ \){new Date().toISOString().slice(0,10)}.png`;
+    link.click();
 }
 
 function actualizarHistorial(){
-let h=document.getElementById("historial")
-h.innerHTML=""
-historial.forEach(e=>{
-h.innerHTML+=`
-<div>
-${e.fecha} | ${e.subsistema} | 
-D=${e.D.toFixed(4)} | 
-λ=${e.lambda.toFixed(4)}
-</div>`
-})
+    let sel = document.getElementById("historial");
+    sel.innerHTML = "";
+    historial.filter(h => h.activo === activoActual).forEach((h,i) => {
+        let fechaTxt = h.fecha.toLocaleString('es-AR', {dateStyle:'short', timeStyle:'short'});
+        sel.innerHTML += `<option value="\( {i}"> \){h.subsistema} – ${fechaTxt}</option>`;
+    });
+}
+
+function verHistorial(){
+    let idx = document.getElementById("historial").value;
+    let h = historial[idx];
+    if(!h) return;
+
+    let hr = (typeof h.horasRestantes === 'number') ? h.horasRestantes.toFixed(1) + " h" : h.horasRestantes;
+    document.getElementById("detalleHistorial").innerHTML = `
+    Activo: ${activos[h.activo].nombre}<br>
+    Fecha: ${h.fecha.toLocaleString('es-AR')}<br>
+    Subsistema: ${h.subsistema}<br>
+    λ: ${h.lambda.toExponential(6)}<br>
+    D: ${h.D.toFixed(6)}<br>
+    Vida restante MIDF-MCF: ${hr}<br>
+    Confiabilidad MIDF-MCF: ${h.confiabilidadPct} %<br>
+    Vida estudio: ${h.vidaEstudio} h<br>
+    Factor climático: ${h.factorClima.toFixed(2)}<br>
+    Modo carga: ${h.modoCarga}<br>
+    Método integración: ${h.metodo}<br>
+    t acumulado: ${h.tAcumulado.toFixed(2)} h`;
 }
 
 function exportarJSON(){
-let data={subsistemas, historial}
-let blob=new Blob([JSON.stringify(data,null,2)],
-{type:"application/json"})
-let a=document.createElement("a")
-a.href=URL.createObjectURL(blob)
-a.download="midf_mcf_data.json"
-a.click()
+    let data = { activos, mcfExtras, historial: historial.map(h=>({...h, fecha:h.fecha.toISOString()})) };
+    let blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "midf_mcf_v9.3_data.json";
+    a.click();
+    guardarLocal();
 }
 
 function importarJSON(){
-let input=document.createElement("input")
-input.type="file"
-input.accept=".json"
-input.onchange=e=>{
-let reader=new FileReader()
-reader.onload=ev=>{
-let data=JSON.parse(ev.target.result)
-subsistemas=data.subsistemas||[]
-historial=data.historial||[]
-render()
-actualizarHistorial()
-guardarLocal()
-}
-reader.readAsText(e.target.files[0])
-}
-input.click()
+    let input = document.createElement("input");
+    input.type = "file"; input.accept = ".json";
+    input.onchange = e => {
+        let file = e.target.files[0];
+        if(!file) return;
+        let reader = new FileReader();
+        reader.onload = ev => {
+            try {
+                let data = JSON.parse(ev.target.result);
+                activos = data.activos || {};
+                mcfExtras = data.mcfExtras || {};
+                historial = (data.historial || []).map(h => ({...h, fecha: new Date(h.fecha)}));
+                actualizarHistorial();
+                renderSubsistemas();
+                renderMCFExtras();
+                actualizarSelectorGrafico();
+                guardarLocal();
+                alert("Importación correcta");
+            } catch(err){
+                alert("JSON inválido:\n" + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
 }
 
 function guardarLocal(){
-localStorage.setItem("midf_mcf",JSON.stringify({subsistemas,historial}))
+    localStorage.setItem("midf_mcf_v9.3", JSON.stringify({
+        activos,
+        mcfExtras,
+        historial: historial.map(h=>({...h, fecha:h.fecha.toISOString()}))
+    }));
 }
 
 function cargarLocal(){
-let saved=localStorage.getItem("midf_mcf")
-if(saved){
-let data=JSON.parse(saved)
-subsistemas=data.subsistemas||[]
-historial=data.historial||[]
-}
-render()
-actualizarHistorial()
-}
-
-function procesarCrudos(){
-let texto=document.getElementById("datosCrudos").value
-let arr=texto.split(/[\n,]+/)
-.map(x=>parseFloat(x))
-.filter(x=>!isNaN(x))
-
-if(arr.length==0){
-alert("Sin datos válidos")
-return
+    let saved = localStorage.getItem("midf_mcf_v9.3");
+    if(!saved) return;
+    try {
+        let data = JSON.parse(saved);
+        activos = data.activos || {};
+        mcfExtras = data.mcfExtras || {};
+        historial = (data.historial || []).map(h => ({...h, fecha: new Date(h.fecha)}));
+        actualizarHistorial();
+        renderSubsistemas();
+        renderMCFExtras();
+        actualizarSelectorGrafico();
+    } catch(e){}
 }
 
-let prom=arr.reduce((a,b)=>a+b,0)/arr.length
-let max=Math.max(...arr)
-let min=Math.min(...arr)
-
-document.getElementById("resultadoCrudos").innerHTML=
-`Promedio=${prom.toFixed(4)} | 
-Max=${max.toFixed(4)} | 
-Min=${min.toFixed(4)}`
-}
-
-window.onload=cargarLocal
+window.onload = function(){
+    cargarLocal();
+    actualizarSelectorGrafico();
+};
 
 </script>
 </body>

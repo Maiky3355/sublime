@@ -105,7 +105,7 @@ Agregar factor MCF adicional:<br>
 
 <script>
 // =============================================================================
-// MIDF-MCF v9.3 – Versión Funcional Corregida
+// MIDF-MCF v9.3 – Versión Corregida y 100% Funcional
 // Autor: Sebastián Héctor Manassero (@SebasSublime)
 // Todos los derechos reservados. © 2026 Sebastián Héctor Manassero
 // =============================================================================
@@ -156,7 +156,10 @@ function agregarSubsistema(){
         fechaAnterior: null, 
         extras: {},
         modoCarga: "auto",
-        cargaManual: 1.0
+        cargaManual: 1.0,
+        uvAplica: false,
+        uvFactor: 1.0,
+        gravedadFactor: 1.0
     });
     renderSubsistemas();
     actualizarSelectorGrafico();
@@ -217,11 +220,11 @@ function renderSubsistemas(){
             Humedad (%): <input type="number" id="humedad${i}" value="50" step="1"><br>
             Nivel polvo (1–3): <input type="number" id="polvo${i}" value="1" min="1" max="3" step="1"><br>
             Nivel corrosión (0–1): <input type="number" id="corrosion${i}" value="0" step="0.1"><br>
-            UV aplica: <input type="checkbox" id="uvCheck\( {i}" onchange="document.getElementById('uvFactorDiv \){i}').style.display = this.checked ? 'block' : 'none'">
-            <div id="uvFactorDiv\( {i}" style="display: \){s.uvAplica ? 'block' : 'none'};">
-                UV factor: <input type="number" id="UV\( {i}" value=" \){s.uvFactor || 1}" step="0.01">
+            UV aplica: <input type="checkbox" id="uvCheck${i}" \( {s.uvAplica ? 'checked' : ''} onchange="activos[' \){activoActual}'].subsistemas[${i}].uvAplica = this.checked; renderSubsistemas()">
+            <div id="uvFactorDiv\( {i}" style="display: \){s.uvAplica ? 'block' : 'none'}; margin-top:6px;">
+                UV factor: <input type="number" id="UV\( {i}" value=" \){s.uvFactor || 1}" step="0.01" onchange="activos['\( {activoActual}'].subsistemas[ \){i}].uvFactor = parseFloat(this.value) || 1">
             </div><br>
-            Gravedad factor: <input type="number" id="Gv\( {i}" value=" \){s.gravedadFactor || 1}" step="0.01"><br><br>
+            Gravedad factor: <input type="number" id="Gv\( {i}" value=" \){s.gravedadFactor || 1}" step="0.01" onchange="activos['\( {activoActual}'].subsistemas[ \){i}].gravedadFactor = parseFloat(this.value) || 1"><br><br>
 
             Agregar factor extra:<br>
             <input type="text" id="extraNombre${i}" placeholder="Nombre">
@@ -325,7 +328,8 @@ function calcular(){
         let E = factorClima;
         let P  = 1;
         let Gv = parseFloat(document.getElementById("Gv"+i).value) || 1;
-        let UV = document.getElementById("uvCheck"+i).checked ? (parseFloat(document.getElementById("UV"+i).value)||1) : 1;
+        let uvAplica = document.getElementById("uvCheck"+i).checked;
+        let UV = uvAplica ? (parseFloat(document.getElementById("UV"+i).value)||1) : 1;
 
         let extrasTotal = Object.values(s.extras).reduce((a,b)=>a*b, 1);
 

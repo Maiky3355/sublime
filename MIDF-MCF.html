@@ -1,256 +1,212 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>MIDF–MCF Ingeniería | Consola Profesional</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>MIDF-MCF Firmware V3</title>
 <style>
-body{font-family:Segoe UI;background:#f4f6f9;margin:0;display:flex;height:100vh}
-.sidebar{width:420px;background:#fff;padding:20px;overflow:auto;border-right:2px solid #ddd}
-.main{flex:1;padding:30px;overflow:auto}
-h2{font-size:14px;color:#1e3a8a;border-bottom:1px solid #ddd;padding-bottom:6px}
-input,select{width:100%;padding:8px;margin-bottom:10px;border:1px solid #ccc;border-radius:6px}
-button{padding:10px;width:100%;border:none;border-radius:6px;font-weight:bold;cursor:pointer}
-.btn{background:#1e3a8a;color:white}
-.badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:bold}
-.green{background:#dcfce7;color:#065f46}
-.yellow{background:#fef3c7;color:#92400e}
-.red{background:#fee2e2;color:#991b1b}
-table{width:100%;border-collapse:collapse;background:#fff}
-th,td{padding:10px;border-bottom:1px solid #eee;font-size:13px}
-.small{font-size:12px;color:#555}
-.dynamic-row{display:flex;gap:5px;margin-bottom:5px}
-.dynamic-row input{flex:1}
+body { font-family: Arial; margin:20px; }
+input, select { margin:3px; }
+.subsystem { border:1px solid #aaa; padding:10px; margin:10px 0; }
+.green { background:#d4edda; }
+.yellow { background:#fff3cd; }
+.red { background:#f8d7da; }
+button { margin:5px; }
 </style>
 </head>
 <body>
 
-<div class="sidebar">
+<h2>MIDF-MCF Degradation Engine V3</h2>
 
-<h2>1. Subsistema</h2>
-<input id="name" placeholder="Nombre subsistema">
-<input id="life" type="number" placeholder="Vida nominal (horas)">
-<input id="weight" type="number" placeholder="Criticidad (peso)">
+Fecha de medición:
+<input type="datetime-local" id="fecha" required>
 
-<h2>2. Fecha medición</h2>
-<input id="datetime" type="datetime-local">
+<h3>Método de integración</h3>
+<select id="modoIntegracion">
+<option value="promedio">Promedio lineal (Recomendado)</option>
+<option value="final">Conservador (λ final)</option>
+<option value="inicial">Histórico (λ inicial)</option>
+</select>
 
-<h2>3. Factores base MIDF</h2>
-<input id="ref_load" type="number" placeholder="Carga diseño">
-<input id="real_load" type="number" placeholder="Carga real">
-<input id="env" type="number" step="0.01" placeholder="E (ambiente)">
-<input id="pres" type="number" step="0.01" placeholder="P (presión)">
-<input id="grav" type="number" step="0.01" placeholder="G (gravedad)">
-<input id="surf" type="number" step="0.01" placeholder="S (superficie)">
-<input id="mcf" type="number" step="0.01" placeholder="C (MCF)">
+<div id="subsistemas"></div>
 
-<h2>4. Factores degradantes dinámicos</h2>
-<div id="dynamicFactors"></div>
-<button onclick="addFactor()">+ Agregar Factor</button>
+<button onclick="agregarSubsistema()">Agregar Subsistema</button>
+<button onclick="calcular()">Calcular</button>
+<button onclick="exportarJSON()">Exportar JSON</button>
 
-<br><br>
-<button class="btn" onclick="processData()">PROCESAR</button>
-<br><br>
-<button onclick="exportJSON()">Exportar JSON</button>
-
-</div>
-
-<div class="main">
-
-<h1>D_sys: <span id="dsys">0.0000</span></h1>
-<div id="globalStatus"></div>
-
-<h2>Estado Subsistemas</h2>
-<table>
-<thead>
-<tr>
-<th>Subsistema</th>
-<th>D_i</th>
-<th>λ</th>
-<th>Vida restante (h)</th>
-<th>Estado</th>
-</tr>
-</thead>
-<tbody id="tableBody"></tbody>
-</table>
-
-<h2>Evolución Temporal</h2>
-<canvas id="chart"></canvas>
-
-<h2>Historial</h2>
-<select id="historySelect" onchange="loadHistory()"></select>
-<div id="historyBox" class="small"></div>
-
-</div>
+<h3>Historial</h3>
+<select id="historial" onchange="verHistorial()"></select>
+<div id="detalleHistorial"></div>
 
 <script>
 
-let db = JSON.parse(localStorage.getItem("midf_db")) || [];
-let chart;
+let subsistemas = []
+let historial = []
 
-function addFactor(){
-    const container=document.getElementById("dynamicFactors");
-    const row=document.createElement("div");
-    row.className="dynamic-row";
-    row.innerHTML=`
-        <input placeholder="Nombre factor">
-        <input type="number" step="0.01" placeholder="Valor">
-    `;
-    container.appendChild(row);
-}
+function agregarSubsistema(){
+    let id = subsistemas.length
 
-function processData(){
+    subsistemas.push({
+        nombre: "Subsistema_"+id,
+        D: 0,
+        lambdaAnterior: null,
+        fechaAnterior: null,
+        datosExtras: {}
+    })
 
-    const name=document.getElementById("name").value;
-    const life=parseFloat(document.getElementById("life").value);
-    const weight=parseFloat(document.getElementById("weight").value);
-    const dtInput=document.getElementById("datetime").value;
-
-    const ref=parseFloat(document.getElementById("ref_load").value);
-    const real=parseFloat(document.getElementById("real_load").value);
-
-    const L=real/ref;
-    const E=parseFloat(document.getElementById("env").value)||1;
-    const P=parseFloat(document.getElementById("pres").value)||1;
-    const G=parseFloat(document.getElementById("grav").value)||1;
-    const S=parseFloat(document.getElementById("surf").value)||1;
-    const C=parseFloat(document.getElementById("mcf").value)||1;
-
-    const lambdaBase=1/life;
-
-    let Fk=1;
-    let factorData={};
-    document.querySelectorAll("#dynamicFactors .dynamic-row").forEach(r=>{
-        const fname=r.children[0].value;
-        const fval=parseFloat(r.children[1].value)||1;
-        if(fname){
-            Fk*=fval;
-            factorData[fname]=fval;
-        }
-    });
-
-    const lambda=lambdaBase*L*E*P*G*S*C*Fk;
-
-    let sub=db.find(s=>s.name===name);
-    const now=new Date(dtInput);
-
-    if(!sub){
-        sub={name,weight,history:[],D:0};
-        db.push(sub);
-    }
-
-    let lastDate=sub.history.length? new Date(sub.history[sub.history.length-1].date):now;
-    let deltaH=(now-lastDate)/3600000;
-    if(deltaH<0) deltaH=0;
-
-    sub.D+=lambda*deltaH;
-
-    let vidaRest=(1-sub.D)/lambda;
-    if(sub.D>1) vidaRest=-(sub.D-1)/lambda;
-
-    sub.history.push({
-        date:dtInput,
-        lambda,
-        D:sub.D,
-        lifeRemaining:vidaRest,
-        factors:{L,E,P,G,S,C,...factorData}
-    });
-
-    localStorage.setItem("midf_db",JSON.stringify(db));
-
-    render();
+    render()
 }
 
 function render(){
+    let container = document.getElementById("subsistemas")
+    container.innerHTML = ""
 
-    const body=document.getElementById("tableBody");
-    body.innerHTML="";
-    let totalW=db.reduce((a,b)=>a+b.weight,0);
-    let Dsys=0;
+    subsistemas.forEach((sub,i)=>{
 
-    db.forEach(s=>{
-        let last=s.history[s.history.length-1];
-        let pond=s.weight/totalW;
-        Dsys+=s.D*pond;
+        let color = "green"
+        if(sub.D >= 0.7 && sub.D < 1) color="yellow"
+        if(sub.D >= 1) color="red"
 
-        let stateClass="green";
-        let stateText="OPERATIVO";
+        container.innerHTML += `
+        <div class="subsystem ${color}">
+        <b>${sub.nombre}</b><br>
 
-        if(s.D>=1){stateClass="red";stateText="FALLA FUNCIONAL";}
-        else if(s.D>=0.7){stateClass="yellow";stateText="CRÍTICO";}
+        L (Carga): <input type="number" step="0.01" id="L${i}">
+        E (Ambiente): <input type="number" step="0.01" id="E${i}">
+        G (Geometría): <input type="number" step="0.01" id="G${i}">
+        P (Proceso): <input type="number" step="0.01" id="P${i}">
+        S (Solar/UV si aplica): <input type="number" step="0.01" id="S${i}">
+        C (MCF): <input type="number" step="0.01" id="C${i}">
 
-        body.innerHTML+=`
-        <tr>
-        <td>${s.name}</td>
-        <td>${s.D.toFixed(4)}</td>
-        <td>${last.lambda.toExponential(3)}</td>
-        <td>${Math.round(last.lifeRemaining)}</td>
-        <td><span class="badge ${stateClass}">${stateText}</span></td>
-        </tr>
-        `;
-    });
+        <br><br>
+        Degradantes adicionales dinámicos:<br>
+        <input type="text" placeholder="Nombre variable" id="extraNombre${i}">
+        <input type="number" step="0.01" placeholder="Valor" id="extraValor${i}">
+        <button onclick="agregarExtra(${i})">Agregar</button>
 
-    document.getElementById("dsys").innerText=Dsys.toFixed(4);
+        <div id="extras${i}"></div>
 
-    renderChart();
-    loadHistorySelect();
+        <br>
+        D acumulado: ${sub.D.toFixed(4)}
+        </div>
+        `
+    })
 }
 
-function renderChart(){
-    const ctx=document.getElementById("chart");
-    if(chart) chart.destroy();
+function agregarExtra(i){
+    let nombre = document.getElementById("extraNombre"+i).value
+    let valor = parseFloat(document.getElementById("extraValor"+i).value)
 
-    let labels=[];
-    let data=[];
-    if(db.length){
-        let sub=db[0];
-        sub.history.forEach(h=>{
-            labels.push(h.date);
-            data.push(h.D);
-        });
+    if(!nombre || isNaN(valor)) return
+
+    subsistemas[i].datosExtras[nombre] = valor
+    renderExtras(i)
+}
+
+function renderExtras(i){
+    let div = document.getElementById("extras"+i)
+    div.innerHTML = ""
+
+    for(let key in subsistemas[i].datosExtras){
+        div.innerHTML += key + ": " + subsistemas[i].datosExtras[key] + "<br>"
+    }
+}
+
+function calcular(){
+
+    let fechaInput = document.getElementById("fecha").value
+    if(!fechaInput){
+        alert("Debe ingresar fecha obligatoriamente")
+        return
     }
 
-    chart=new Chart(ctx,{
-        type:'line',
-        data:{
-            labels,
-            datasets:[{
-                label:'D_i',
-                data,
-                borderColor:'red',
-                fill:false
-            }]
+    let fechaActual = new Date(fechaInput)
+    let modo = document.getElementById("modoIntegracion").value
+
+    subsistemas.forEach((sub,i)=>{
+
+        let L = parseFloat(document.getElementById("L"+i).value) || 1
+        let E = parseFloat(document.getElementById("E"+i).value) || 1
+        let G = parseFloat(document.getElementById("G"+i).value) || 1
+        let P = parseFloat(document.getElementById("P"+i).value) || 1
+        let S = parseFloat(document.getElementById("S"+i).value) || 1
+        let C = parseFloat(document.getElementById("C"+i).value) || 1
+
+        let lambdaActual = L*E*G*P*S*C
+
+        if(sub.fechaAnterior){
+            let deltaH = (fechaActual - sub.fechaAnterior)/(1000*60*60)
+
+            let incremento = 0
+
+            if(modo=="final"){
+                incremento = lambdaActual * deltaH
+            }
+
+            if(modo=="inicial" && sub.lambdaAnterior){
+                incremento = sub.lambdaAnterior * deltaH
+            }
+
+            if(modo=="promedio" && sub.lambdaAnterior){
+                incremento = ((sub.lambdaAnterior + lambdaActual)/2) * deltaH
+            }
+
+            sub.D += incremento
         }
-    });
+
+        sub.lambdaAnterior = lambdaActual
+        sub.fechaAnterior = fechaActual
+
+        // Calcular horas restantes
+        let horasRestantes = null
+        if(lambdaActual>0){
+            horasRestantes = (1 - sub.D)/lambdaActual
+        }
+
+        historial.push({
+            fecha: fechaActual,
+            subsistema: sub.nombre,
+            lambda: lambdaActual,
+            D: sub.D,
+            metodo: modo,
+            horasRestantes: horasRestantes
+        })
+    })
+
+    actualizarHistorial()
+    render()
 }
 
-function loadHistorySelect(){
-    const sel=document.getElementById("historySelect");
-    sel.innerHTML="";
-    db.forEach((s,i)=>{
-        sel.innerHTML+=`<option value="${i}">${s.name}</option>`;
-    });
+function actualizarHistorial(){
+    let select = document.getElementById("historial")
+    select.innerHTML = ""
+
+    historial.forEach((h,i)=>{
+        select.innerHTML += `<option value="${i}">${h.subsistema} - ${h.fecha}</option>`
+    })
 }
 
-function loadHistory(){
-    const index=document.getElementById("historySelect").value;
-    const box=document.getElementById("historyBox");
-    if(db[index]){
-        box.innerHTML=db[index].history.map(h=>
-            `${h.date} | D=${h.D.toFixed(3)} | λ=${h.lambda.toExponential(2)} | Vida=${Math.round(h.lifeRemaining)}h`
-        ).join("<br>");
-    }
+function verHistorial(){
+    let i = document.getElementById("historial").value
+    let h = historial[i]
+
+    document.getElementById("detalleHistorial").innerHTML = `
+    Fecha: ${h.fecha}<br>
+    Subsistema: ${h.subsistema}<br>
+    Lambda: ${h.lambda.toFixed(4)}<br>
+    D acumulado: ${h.D.toFixed(4)}<br>
+    Método: ${h.metodo}<br>
+    Horas restantes estimadas: ${h.horasRestantes ? h.horasRestantes.toFixed(2) : "N/A"}
+    `
 }
 
-function exportJSON(){
-    const dataStr="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(db,null,2));
-    const a=document.createElement('a');
-    a.href=dataStr;
-    a.download="midf_mcf_historial.json";
-    a.click();
+function exportarJSON(){
+    let data = JSON.stringify({subsistemas, historial})
+    let blob = new Blob([data], {type:"application/json"})
+    let a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = "midf_mcf_data.json"
+    a.click()
 }
-
-render();
 
 </script>
 </body>

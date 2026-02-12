@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MIDF-MCF Framework Consolidado</title>
+
+<!--
+MIT License
+
+Copyright (c) 2026 Sebastián Manassero
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction...
+-->
+
+<style>
+body{font-family:Arial;margin:20px;background:#f2f2f2}
+.sub{border:1px solid #bbb;padding:12px;margin-bottom:18px;background:white}
+.green{background:#d4edda}
+.yellow{background:#fff3cd}
+.red{background:#f8d7da}
+input,button{margin:3px}
+textarea{width:100%;height:110px}
+small{color:#555}
+</style>
+</head>
+<body>
+
+<h2>MIDF-MCF Framework – Versión Consolidada</h2>
+
+<h3>Configuración Global</h3>
+Umbral Amarillo:
+<input type="number" id="umbralA" value="0.7" step="0.01">
+Umbral Rojo:
+<input type="number" id="umbralR" value="1.0" step="0.01">
+Umbral Fallo Técnico:
+<input type="number" id="umbralFallo" value="1.0" step="0.01">
+
+<hr>
+
+<button onclick="agregarSubsistema()">Agregar Subsistema</button>
+<button onclick="exportarJSON()">Exportar JSON</button>
+<button onclick="importarJSON()">Importar JSON</button>
+
+<div id="subsistemas"></div>
+
+<hr>
+<h3>Historial General</h3>
+<div id="historial"></div>
+
+<hr>
+<h3>Tratamiento de Datos Crudos de Planta</h3>
+<textarea id="datosCrudos" placeholder="Valores separados por coma o salto de línea"></textarea>
+<button onclick="procesarCrudos()">Procesar</button>
+<div id="resultadoCrudos"></div>
+
+<script>
+
+let subsistemas=[]
+let historial=[]
+
+function agregarSubsistema(){
+subsistemas.push({
+nombre:"Subsistema_"+subsistemas.length,
+D:0,
+lambdaAnterior:0,
+fechaAnterior:null,
+vidaFabricante:0,
+horasTrabajoDiarias:24,
+MCF:0,
+variables:[],
+extraInputs:{}
+})
+render()
+guardarLocal()
+}
+
+function render(){
+let cont=document.getElementById("subsistemas")
+cont.innerHTML=""
+
+let umA=parseFloat(document.getElementById("umbralA").value)||0.7
+let umR=parseFloat(document.getElementById("umbralR").value)||1.0
+
+subsistemas.forEach((s,i)=>{
+
+let clase="green"
+if(s.D>=umA && s.D<umR) clase="yellow"
+if(s.D>=umR) clase="red"
+
+cont.innerHTML+=`
+<div class="sub ${clase}">
+<b><input value="${s.nombre}" 
+onchange="subsistemas[${i}].nombre=this.value;guardarLocal()"></b><br>
+
+Fecha (obligatoria):
+<input type="date" id="fecha${i}"><br>
+
+Carga Real:
+<input type="number" id="cargaReal${i}" step="0.01"><br>
+
+Carga Manual:
+<input type="number" id="cargaManual${i}" step="0.01"><br>
+
+Vida estimada fabricante (horas):
+<input type="number" id="vidaFab${i}" value="${s.vidaFabricante}"><br>
+
+Gravedad:
+<input type="checkbox" id="grav${i}">
+
+UV:
+<input type="checkbox" id="uv${i}"><br>
+
+Corrosión parcial (0 a 1):
+<input type="number" id="corr${i}" min="0" max="1" step="0.01"><br>
+
+MCF regenerativo (0 a 1):
+<input type="number" id="mcf${i}" step="0.01"><br>
+
+Horas de trabajo diarias:
+<input type="number" id="hDia${i}" value="${s.horasTrabajoDiarias}"><br>
+
+<button onclick="calcular(${i})">Calcular</button>
+
+<hr>
+
+D acumulado:
+<b>${s.D.toFixed(4)}</b><br>
+
+Horas restantes:
+<b>${horasRestantes(s)}</b><br>
+
+Días restantes:
+<b>${diasRestantes(s)}</b><br>
+
+<hr>
+Variables dinámicas MIDF:<br>
+<div id="vars${i}"></div>
+<button onclick="agregarVariable(${i})">Agregar Variable</button>
+
+</div>
+`
+renderVariables(i)
+})
+}
+
+function renderVariables(i){
+let div=document.getElementById("vars"+i)
+if(!div)return
+div.innerHTML=""
+subsistemas[i].variables.forEach((v,j)=>{
+div.innerHTML+=`
+<input placeholder="Nombre" value="${v.nombre}"
+onchange="subsistemas[${i}].variables[${j}].nombre=this.value">
+<input type="number" placeholder="Valor"
+value="${v.valor}" step="0.01"
+onchange="subsistemas[${i}].variables[${j}].valor=parseFloat(this.value)">
+<input type="number" placeholder="Peso λ"
+value="${v.peso}" step="0.01"
+onchange="subsistemas[${i}].variables[${j}].peso=parseFloat(this.value)">
+<br>`
+})
+}
+
+function agregarVariable(i){
+subsistemas[i].variables.push({nombre:"var",valor:0,peso:0})
+render()
+guardarLocal()
+}
+
+function calcular(i){
+
+let s=subsistemas[i]
+let fecha=document.getElementById("fecha"+i).value
+if(!fecha){alert("Debe ingresar fecha");return}
+
+let cargaReal=parseFloat(document.getElementById("cargaReal"+i).value)||0
+let cargaManual=parseFloat(document.getElementById("cargaManual"+i).value)||0
+let gravedad=document.getElementById("grav"+i).checked?0.1:0
+let uv=document.getElementById("uv"+i).checked?0.1:0
+let corrosion=parseFloat(document.getElementById("corr"+i).value)||0
+let mcf=parseFloat(document.getElementById("mcf"+i).value)||0
+
+s.vidaFabricante=parseFloat(document.getElementById("vidaFab"+i).value)||0
+s.horasTrabajoDiarias=parseFloat(document.getElementById("hDia"+i).value)||24
+
+let lambda=0
+
+lambda+=cargaReal
+lambda+=cargaManual
+lambda+=gravedad
+lambda+=uv
+lambda+=corrosion
+
+s.variables.forEach(v=>{
+lambda+=(v.valor||0)*(v.peso||0)
+})
+
+let fechaActual=new Date(fecha)
+
+if(s.fechaAnterior){
+let deltaHoras=(fechaActual-new Date(s.fechaAnterior))/(1000*60*60)
+let lambdaProm=(s.lambdaAnterior+lambda)/2
+if(deltaHoras>0){
+s.D+=lambdaProm*deltaHoras
+}
+}
+
+if(mcf>0){
+s.D=s.D*(1-mcf)
+}
+
+s.lambdaAnterior=lambda
+s.fechaAnterior=fecha
+s.MCF=mcf
+
+historial.push({
+subsistema:s.nombre,
+fecha:fecha,
+D:s.D,
+lambda:lambda
+})
+
+render()
+actualizarHistorial()
+guardarLocal()
+}
+
+function horasRestantes(s){
+let umbral=parseFloat(document.getElementById("umbralFallo").value)||1
+if(s.lambdaAnterior<=0)return "Estacionario"
+let restante=(umbral-s.D)/s.lambdaAnterior
+if(restante<0)return "Superado"
+return restante.toFixed(2)
+}
+
+function diasRestantes(s){
+let hr=parseFloat(horasRestantes(s))
+if(isNaN(hr))return "-"
+return (hr/(s.horasTrabajoDiarias||24)).toFixed(2)
+}
+
+function actualizarHistorial(){
+let h=document.getElementById("historial")
+h.innerHTML=""
+historial.forEach(e=>{
+h.innerHTML+=`
+<div>
+${e.fecha} | ${e.subsistema} | 
+D=${e.D.toFixed(4)} | 
+λ=${e.lambda.toFixed(4)}
+</div>`
+})
+}
+
+function exportarJSON(){
+let data={subsistemas, historial}
+let blob=new Blob([JSON.stringify(data,null,2)],
+{type:"application/json"})
+let a=document.createElement("a")
+a.href=URL.createObjectURL(blob)
+a.download="midf_mcf_data.json"
+a.click()
+}
+
+function importarJSON(){
+let input=document.createElement("input")
+input.type="file"
+input.accept=".json"
+input.onchange=e=>{
+let reader=new FileReader()
+reader.onload=ev=>{
+let data=JSON.parse(ev.target.result)
+subsistemas=data.subsistemas||[]
+historial=data.historial||[]
+render()
+actualizarHistorial()
+guardarLocal()
+}
+reader.readAsText(e.target.files[0])
+}
+input.click()
+}
+
+function guardarLocal(){
+localStorage.setItem("midf_mcf",JSON.stringify({subsistemas,historial}))
+}
+
+function cargarLocal(){
+let saved=localStorage.getItem("midf_mcf")
+if(saved){
+let data=JSON.parse(saved)
+subsistemas=data.subsistemas||[]
+historial=data.historial||[]
+}
+render()
+actualizarHistorial()
+}
+
+function procesarCrudos(){
+let texto=document.getElementById("datosCrudos").value
+let arr=texto.split(/[\n,]+/)
+.map(x=>parseFloat(x))
+.filter(x=>!isNaN(x))
+
+if(arr.length==0){
+alert("Sin datos válidos")
+return
+}
+
+let prom=arr.reduce((a,b)=>a+b,0)/arr.length
+let max=Math.max(...arr)
+let min=Math.min(...arr)
+
+document.getElementById("resultadoCrudos").innerHTML=
+`Promedio=${prom.toFixed(4)} | 
+Max=${max.toFixed(4)} | 
+Min=${min.toFixed(4)}`
+}
+
+window.onload=cargarLocal
+
+</script>
+</body>
+</html>

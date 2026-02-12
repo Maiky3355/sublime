@@ -1,293 +1,443 @@
+<!-- 
+================================================================================
+MIDF-MCF v8.2 – Motor de Degradación Paramétrica con Benchmark Weibull
+Autor: Sebastián Héctor Manassero
+sebastianhectormanassero@gmail.com
+Todos los derechos reservados. © 2026 Sebastián Héctor Manassero
+
+Este software es propiedad intelectual privada. 
+Prohibida su copia, distribución, modificación, uso comercial, integración en productos o servicios, 
+o cualquier forma de explotación sin autorización expresa y por escrito del autor.
+
+Para consultas de licencia comercial, demostraciones o colaboración contactar a:
+sebastianhectormanassero@gmail.com
+No se otorga ninguna licencia implícita ni explícita de uso más allá de la ejecución privada personal.
+================================================================================
+-->
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>MIDF-MCF V6 Profesional</title>
+<title>MIDF-MCF V8.2 – Núcleo Puro + Weibull Benchmark Mejorado</title>
 <style>
 body { font-family: Arial; margin:20px; }
 .section { border:1px solid #aaa; padding:15px; margin:15px 0; }
-input { margin:3px; }
+input, select { margin:3px; }
 .subsystem { border:1px solid #666; padding:10px; margin:10px 0; }
+.green { background:#d4edda; }
+.yellow { background:#fff3cd; }
+.red { background:#f8d7da; font-weight:bold; }
+.alert { color:#c00; font-weight:bold; }
+.weibull-benchmark { display:none; background:#f0f8ff; padding:8px; margin:8px 0; border-left:4px solid #4682b4; }
+.benchmark-text { color:#4682b4; font-style:italic; }
 </style>
 </head>
 <body>
 
-<h2>MIDF-MCF V6 – Sistema Completo Flexible</h2>
+<h2>MIDF-MCF V8.2 – Núcleo Puro + Weibull Benchmark con Vida Restante Teórica</h2>
 
-<!-- ================= FABRICA ================= -->
-
+<!-- FABRICA (fallback global) -->
 <div class="section">
-<h3>Normalización Datos de Fábrica</h3>
-
-Vida declarada (h):
-<input type="number" id="vidaFab">
-
-Confiabilidad (% ej 90):
-<input type="number" id="confFab">
-
-<button onclick="convertirLambda()">Convertir a λ_base</button>
-
+<h3>Normalización Datos de Fábrica (fallback global)</h3>
+Vida declarada (h): <input type="number" id="vidaFab"><br>
+Confiabilidad (% ej 90): <input type="number" id="confFab"><br>
+<button onclick="convertirLambda()">Convertir a λ_base global</button>
 <div id="lambdaCalculado"></div>
-
 </div>
 
-<!-- ================= CONFIG GLOBAL ================= -->
-
+<!-- CONFIG GLOBAL -->
 <div class="section">
 <h3>Configuración Global</h3>
-
-Fecha:
-<input type="datetime-local" id="fecha">
-
-Umbral fallo:
-<input type="number" id="umbralFallo" value="1" step="0.01">
-
+Fecha: <input type="datetime-local" id="fecha" required><br>
+Umbral fallo: <input type="number" id="umbralFallo" value="1" step="0.01"><br>
 Modo integración:
 <select id="modoIntegracion">
-<option value="promedio">Promedio</option>
-<option value="final">Final</option>
-<option value="inicial">Inicial</option>
-</select>
-
-<br><br>
-
-λ_base actual:
-<input type="number" id="lambdaBaseGlobal" step="0.00000001">
-
+<option value="promedio">Promedio (recomendado)</option>
+<option value="final">Conservador (λ final)</option>
+<option value="inicial">Histórico (λ inicial)</option>
+</select><br><br>
+λ_base global (fallback): <input type="number" id="lambdaBaseGlobal" step="0.00000001" value="0">
 </div>
 
-<!-- ================= MCF ================= -->
-
+<!-- MCF GLOBAL -->
 <div class="section">
-<h3>MCF Completa</h3>
+<h3>MCF Completa (global)</h3>
+Material: <input type="number" id="mcfMaterial" value="1" step="0.01"><br>
+Tratamiento: <input type="number" id="mcfTratamiento" value="1" step="0.01"><br>
+Proceso Fabricación: <input type="number" id="mcfProceso" value="1" step="0.01"><br>
+Confiabilidad estadística: <input type="number" id="mcfConfiabilidad" value="1" step="0.01"><br>
+Factor Lote: <input type="number" id="mcfLote" value="1" step="0.01"><br><br>
 
-Material:
-<input type="number" id="mcfMaterial" value="1" step="0.01">
-
-Tratamiento:
-<input type="number" id="mcfTratamiento" value="1" step="0.01">
-
-Proceso Fabricación:
-<input type="number" id="mcfProceso" value="1" step="0.01">
-
-Confiabilidad estadística:
-<input type="number" id="mcfConfiabilidad" value="1" step="0.01">
-
-Factor Lote:
-<input type="number" id="mcfLote" value="1" step="0.01">
-
-<br><br>
-
-Agregar factor MCF adicional:
-<input type="text" id="mcfExtraNombre">
-<input type="number" id="mcfExtraValor" step="0.01">
+Agregar factor MCF adicional:<br>
+<input type="text" id="mcfExtraNombre" placeholder="Nombre"> 
+<input type="number" id="mcfExtraValor" step="0.01" placeholder="Valor">
 <button onclick="agregarMCFExtra()">Agregar</button>
-
 <div id="mcfExtras"></div>
-
 </div>
 
-<!-- ================= SUBSISTEMAS ================= -->
-
+<!-- SUBSISTEMAS -->
 <div class="section">
 <h3>Subsistemas MIDF</h3>
-
 <div id="subsistemas"></div>
 <button onclick="agregarSubsistema()">Agregar Subsistema</button>
-
 </div>
 
 <button onclick="calcular()">Calcular</button>
+<button onclick="exportarJSON()">Exportar JSON</button>
+<button onclick="importarJSON()">Importar JSON</button>
+
+<h3>Historial de mediciones</h3>
+<select id="historial" onchange="verHistorial()"></select>
+<div id="detalleHistorial"></div>
 
 <div id="resultados"></div>
-
+<!-- Footer visible con aviso legal -->
+<div class="footer-notice">
+    <strong>Todos los derechos reservados © 2026 Sebastián Héctor Manassero </strong><br>
+    Prohibida su copia, distribución, modificación o uso comercial sin autorización expresa.<br>
+    Para licencias comerciales o consultas: contactar: sebastianhectormanassero@gmail.com
+</div>
 <script>
-
-let subsistemas=[]
-let mcfExtras={}
+// =============================================================================
+// MIDF-MCF v8.2 – Motor de Degradación Paramétrica con Benchmark Weibull
+// Autor: Sebastián Héctor Manassero 
+// Todos los derechos reservados. © 2026 Sebastián Héctor Manassero
+//
+// Este software es propiedad intelectual privada. 
+// Prohibida su copia, distribución, modificación, uso comercial, integración en productos o servicios, 
+// o cualquier forma de explotación sin autorización expresa y por escrito del autor.
+//
+// Para consultas de licencia comercial, demostraciones o colaboración contactar a:
+//
+// sebastianhectormanassero@gmail.com
+// No se otorga ninguna licencia implícita ni explícita de uso más allá de la ejecución privada personal.
+// =============================================================================
+    
+let subsistemas = [];
+let mcfExtras = {};
+let historial = [];
+const MAX_HISTORIAL = 5000;
 
 function convertirLambda(){
-    let vida=parseFloat(document.getElementById("vidaFab").value)
-    let conf=parseFloat(document.getElementById("confFab").value)
+    let vida = parseFloat(document.getElementById("vidaFab").value);
+    let conf = parseFloat(document.getElementById("confFab").value);
+    if(isNaN(vida) || vida <= 0){ alert("Vida declarada inválida"); return; }
 
-    if(!vida||vida<=0){ alert("Vida inválida"); return }
+    let lambda = (conf && conf > 0) ? -Math.log(conf/100) / vida : 1 / vida;
 
-    let lambda
-
-    if(conf && conf>0){
-        let R=conf/100
-        lambda= -Math.log(R)/vida
-    }else{
-        lambda=1/vida
-    }
-
-    document.getElementById("lambdaBaseGlobal").value=lambda
-    document.getElementById("lambdaCalculado").innerHTML=
-        "λ_base calculado: "+lambda.toFixed(10)
+    document.getElementById("lambdaBaseGlobal").value = lambda;
+    document.getElementById("lambdaCalculado").innerHTML = `λ_base global calculado: ${lambda.toExponential(8)}`;
 }
 
 function agregarMCFExtra(){
-    let nombre=document.getElementById("mcfExtraNombre").value
-    let valor=parseFloat(document.getElementById("mcfExtraValor").value)
-    if(!nombre||isNaN(valor)) return
-    mcfExtras[nombre]=valor
-    renderMCFExtras()
+    let nombre = document.getElementById("mcfExtraNombre").value.trim();
+    let valor = parseFloat(document.getElementById("mcfExtraValor").value);
+    if(!nombre || isNaN(valor) || valor <= 0) return;
+    mcfExtras[nombre] = valor;
+    renderMCFExtras();
 }
 
 function renderMCFExtras(){
-    let div=document.getElementById("mcfExtras")
-    div.innerHTML=""
-    for(let k in mcfExtras){
-        div.innerHTML+=k+": "+mcfExtras[k]+"<br>"
-    }
+    let div = document.getElementById("mcfExtras");
+    div.innerHTML = Object.entries(mcfExtras).map(([k,v]) => `${k}: ${v}`).join("<br>");
 }
 
 function agregarSubsistema(){
-    subsistemas.push({
-        nombre:"Nuevo",
-        D:0,
-        lambdaAnterior:null,
-        fechaAnterior:null,
-        extras:{}
-    })
-    renderSubsistemas()
+    subsistemas.push({ 
+        nombre: "Nuevo", 
+        lambdaBase: 0, 
+        mostrarWeibull: false,
+        beta: 1.0,
+        eta: 100000, 
+        tAcumulado: 0,
+        D: 0, 
+        lambdaAnterior: null, 
+        fechaAnterior: null, 
+        extras: {} 
+    });
+    renderSubsistemas();
 }
 
 function renderSubsistemas(){
-    let div=document.getElementById("subsistemas")
-    div.innerHTML=""
-    subsistemas.forEach((s,i)=>{
-        div.innerHTML+=`
-        <div class="subsystem">
-        Nombre:
-        <input value="${s.nombre}" onchange="subsistemas[${i}].nombre=this.value">
+    let container = document.getElementById("subsistemas");
+    container.innerHTML = "";
+    let umbral = parseFloat(document.getElementById("umbralFallo").value) || 1;
+    let lambdaGlobal = parseFloat(document.getElementById("lambdaBaseGlobal").value) || 0;
 
-        <br><br>
+    subsistemas.forEach((s, i) => {
+        let colorClass = "green";
+        if (s.D >= umbral * 0.7 && s.D < umbral) colorClass = "yellow";
+        if (s.D >= umbral) colorClass = "red";
 
-        Carga real:
-        <input type="number" id="cReal${i}" step="0.01">
+        let weibullDisplay = s.mostrarWeibull ? "block" : "none";
 
-        Carga nominal:
-        <input type="number" id="cNom${i}" step="0.01">
+        container.innerHTML += `
+        <div class="subsystem ${colorClass}">
+            <b>Nombre:</b> <input value="\( {s.nombre}" onchange="subsistemas[ \){i}].nombre=this.value"><br><br>
 
-        Ambiente:
-        <input type="number" id="E${i}" value="1" step="0.01">
+            <label><input type="checkbox" id="weibullCheck${i}" ${s.mostrarWeibull ? 'checked' : ''} 
+                   onchange="subsistemas[\( {i}].mostrarWeibull=this.checked; toggleWeibullFields( \){i})">
+            Mostrar benchmark Weibull (referencia estadística)</label><br>
 
-        Proceso:
-        <input type="number" id="P${i}" value="1" step="0.01">
+            <div id="weibullFields\( {i}" class="weibull-benchmark" style="display: \){weibullDisplay};">
+                β (forma): <input type="number" id="beta\( {i}" step="0.01" value=" \){s.beta}" 
+                                  onchange="subsistemas[${i}].beta = parseFloat(this.value) || 1"><br>
+                η (escala, horas): <input type="number" id="eta\( {i}" step="1" value=" \){s.eta}" 
+                                  onchange="subsistemas[${i}].eta = parseFloat(this.value) || 100000"><br>
+            </div><br>
 
-        Gravedad:
-        <input type="number" id="Gv${i}" value="1" step="0.01">
+            λ_base MIDF-MCF (exponencial): 
+            <input type="number" id="lambdaBase\( {i}" step="0.00000001" value=" \){s.lambdaBase}" 
+                   onchange="subsistemas[${i}].lambdaBase = parseFloat(this.value) || 0"><br><br>
 
-        UV aplica:
-        <input type="checkbox" id="uvCheck${i}">
-        UV:
-        <input type="number" id="UV${i}" value="1" step="0.01">
+            Carga real: <input type="number" id="cReal${i}" step="0.01"><br>
+            Carga nominal: <input type="number" id="cNom${i}" step="0.01"><br>
+            Ambiente: <input type="number" id="E${i}" value="1" step="0.01"><br>
+            Proceso: <input type="number" id="P${i}" value="1" step="0.01"><br>
+            Gravedad: <input type="number" id="Gv${i}" value="1" step="0.01"><br>
+            UV aplica: <input type="checkbox" id="uvCheck${i}">
+            UV: <input type="number" id="UV${i}" value="1" step="0.01"><br><br>
 
-        <br><br>
+            Agregar factor extra:<br>
+            <input type="text" id="extraNombre${i}" placeholder="Nombre">
+            <input type="number" id="extraValor${i}" step="0.01" placeholder="Valor">
+            <button onclick="agregarExtra(${i})">Agregar</button>
+            <div id="extras${i}"></div><br>
 
-        Agregar factor extra MIDF:
-        <input type="text" id="extraNombre${i}">
-        <input type="number" id="extraValor${i}" step="0.01">
-        <button onclick="agregarExtra(${i})">Agregar</button>
+            t acumulado (h): ${s.tAcumulado.toFixed(2)}<br>
+            D acumulado: ${s.D.toFixed(6)}
+        </div>`;
+        renderExtras(i);
+    });
+}
 
-        <div id="extras${i}"></div>
-
-        <br>
-        D acumulado: ${s.D.toFixed(6)}
-        </div>
-        `
-        renderExtras(i)
-    })
+function toggleWeibullFields(i){
+    let fields = document.getElementById("weibullFields"+i);
+    let check = document.getElementById("weibullCheck"+i);
+    fields.style.display = check.checked ? "block" : "none";
 }
 
 function agregarExtra(i){
-    let nombre=document.getElementById("extraNombre"+i).value
-    let valor=parseFloat(document.getElementById("extraValor"+i).value)
-    if(!nombre||isNaN(valor)) return
-    subsistemas[i].extras[nombre]=valor
-    renderExtras(i)
+    let nombre = document.getElementById("extraNombre"+i).value.trim();
+    let valor = parseFloat(document.getElementById("extraValor"+i).value);
+    if(!nombre || isNaN(valor) || valor <= 0) return;
+    subsistemas[i].extras[nombre] = valor;
+    renderExtras(i);
+    renderSubsistemas();
 }
 
 function renderExtras(i){
-    let div=document.getElementById("extras"+i)
-    if(!div) return
-    div.innerHTML=""
-    for(let k in subsistemas[i].extras){
-        div.innerHTML+=k+": "+subsistemas[i].extras[k]+"<br>"
-    }
+    let div = document.getElementById("extras"+i);
+    if(!div) return;
+    div.innerHTML = Object.entries(subsistemas[i].extras).map(([k,v]) => `${k}: ${v}`).join("<br>");
+}
+
+function calcularVidaRestanteWeibull(tActual, eta, beta, umbral){
+    if (beta <= 0 || eta <= 0) return "Inválido";
+    // Vida teórica hasta umbral (asumiendo R_crit = e^{-umbral})
+    let R_crit = Math.exp(-umbral);
+    let t_crit = eta * Math.pow(-Math.log(R_crit), 1 / beta);
+    let t_rest = t_crit - tActual;
+    return (t_rest > 0) ? t_rest.toFixed(1) + " h (ref)" : "0 h (ref)";
 }
 
 function calcular(){
+    let fechaStr = document.getElementById("fecha").value;
+    if(!fechaStr){ alert("Fecha obligatoria"); return; }
+    let fechaActual = new Date(fechaStr);
 
-    let fechaInput=document.getElementById("fecha").value
-    if(!fechaInput){ alert("Fecha obligatoria"); return }
+    let lambdaGlobal = parseFloat(document.getElementById("lambdaBaseGlobal").value) || 0;
+    let umbral = parseFloat(document.getElementById("umbralFallo").value) || 1;
+    let modo = document.getElementById("modoIntegracion").value;
 
-    let fechaActual=new Date(fechaInput)
-    let lambdaBase=parseFloat(document.getElementById("lambdaBaseGlobal").value)
-    let umbral=parseFloat(document.getElementById("umbralFallo").value)
-    let modo=document.getElementById("modoIntegracion").value
+    let mcfTotal = 
+        (parseFloat(document.getElementById("mcfMaterial").value)||1) *
+        (parseFloat(document.getElementById("mcfTratamiento").value)||1) *
+        (parseFloat(document.getElementById("mcfProceso").value)||1) *
+        (parseFloat(document.getElementById("mcfConfiabilidad").value)||1) *
+        (parseFloat(document.getElementById("mcfLote").value)||1);
 
-    let mcfTotal=
-        (parseFloat(document.getElementById("mcfMaterial").value)||1)*
-        (parseFloat(document.getElementById("mcfTratamiento").value)||1)*
-        (parseFloat(document.getElementById("mcfProceso").value)||1)*
-        (parseFloat(document.getElementById("mcfConfiabilidad").value)||1)*
-        (parseFloat(document.getElementById("mcfLote").value)||1)
+    Object.values(mcfExtras).forEach(v => mcfTotal *= v);
 
-    for(let k in mcfExtras){
-        mcfTotal*=mcfExtras[k]
-    }
+    let salida = "";
 
-    let salida=""
+    subsistemas.forEach((s, i) => {
+        let lambdaBaseSub = parseFloat(document.getElementById("lambdaBase"+i).value) || 0;
+        let lambdaBase = (lambdaBaseSub > 0) ? lambdaBaseSub : lambdaGlobal;
 
-    subsistemas.forEach((s,i)=>{
+        let cReal = parseFloat(document.getElementById("cReal"+i).value) || 1;
+        let cNom  = parseFloat(document.getElementById("cNom"+i).value)  || 1;
+        if(cNom <= 0){ alert(`Carga nominal inválida en ${s.nombre}`); return; }
 
-        let cReal=parseFloat(document.getElementById("cReal"+i).value)||1
-        let cNom=parseFloat(document.getElementById("cNom"+i).value)||1
+        let factorCarga = cReal / cNom;
+        let E  = parseFloat(document.getElementById("E"+i).value)  || 1;
+        let P  = parseFloat(document.getElementById("P"+i).value)  || 1;
+        let Gv = parseFloat(document.getElementById("Gv"+i).value) || 1;
+        let UV = document.getElementById("uvCheck"+i).checked ? (parseFloat(document.getElementById("UV"+i).value)||1) : 1;
 
-        let factorCarga=cReal/cNom
-        let E=parseFloat(document.getElementById("E"+i).value)||1
-        let P=parseFloat(document.getElementById("P"+i).value)||1
-        let Gv=parseFloat(document.getElementById("Gv"+i).value)||1
-        let UV=document.getElementById("uvCheck"+i).checked
-            ? (parseFloat(document.getElementById("UV"+i).value)||1)
-            : 1
+        let extrasTotal = Object.values(s.extras).reduce((a,b)=>a*b, 1);
 
-        let extrasTotal=1
-        for(let k in s.extras){ extrasTotal*=s.extras[k] }
+        let lambdaActual = lambdaBase * factorCarga * E * P * Gv * UV * extrasTotal * mcfTotal;
 
-        let lambdaActual=lambdaBase*factorCarga*E*P*Gv*UV*mcfTotal*extrasTotal
-
-        if(s.fechaAnterior){
-            let deltaH=(fechaActual-s.fechaAnterior)/(1000*60*60)
-            let incremento=0
-
-            if(modo==="final") incremento=lambdaActual*deltaH
-            if(modo==="inicial"&&s.lambdaAnterior)
-                incremento=s.lambdaAnterior*deltaH
-            if(modo==="promedio"&&s.lambdaAnterior)
-                incremento=((s.lambdaAnterior+lambdaActual)/2)*deltaH
-
-            s.D+=incremento
+        let incremento = 0;
+        if (s.fechaAnterior) {
+            let deltaH = (fechaActual - s.fechaAnterior) / (3600 * 1000);
+            if (deltaH < 0) { alert(`Fecha anterior inválida en ${s.nombre}`); return; }
+            if (deltaH === 0) { alert(`Medición duplicada en ${s.nombre} – sobrescribiendo λ sin incrementar.`); }
+            if (deltaH > 0) {
+                s.tAcumulado += deltaH;
+                if(modo === "final") incremento = lambdaActual * deltaH;
+                else if(modo === "inicial" && s.lambdaAnterior) incremento = s.lambdaAnterior * deltaH;
+                else if(modo === "promedio" && s.lambdaAnterior) incremento = ((s.lambdaAnterior + lambdaActual)/2) * deltaH;
+                s.D += incremento;
+            }
+        } else {
+            s.tAcumulado = 0;
         }
 
-        s.lambdaAnterior=lambdaActual
-        s.fechaAnterior=fechaActual
+        s.lambdaAnterior = lambdaActual;
+        s.fechaAnterior  = fechaActual;
 
-        let horasRestantes=(umbral-s.D)/lambdaActual
+        let horasRestantes = (s.D >= umbral) ? 0 : (lambdaActual > 1e-10 ? (umbral - s.D) / lambdaActual : "Estacionario (λ ≈ 0)");
 
-        salida+=`
-        <b>${s.nombre}</b><br>
-        λ actual: ${lambdaActual.toExponential(6)}<br>
-        Vida restante (h): ${horasRestantes.toFixed(2)}<br>
-        D acumulado: ${s.D.toFixed(6)}<br>
-        <hr>
-        `
-    })
+        let R_midf = Math.exp(-s.D);
+        let confiabilidadPct = (R_midf * 100).toFixed(2);
 
-    document.getElementById("resultados").innerHTML=salida
+        let benchmarkWeibull = "";
+        if (s.mostrarWeibull) {
+            let beta = parseFloat(document.getElementById("beta"+i)?.value) || 1;
+            let eta  = parseFloat(document.getElementById("eta"+i)?.value)  || 100000;
+            if (beta > 0 && eta > 0) {
+                let R_weibull = Math.exp( -Math.pow(s.tAcumulado / eta, beta) );
+                let R_weibullPct = (R_weibull * 100).toFixed(2);
+                let vidaRestWeibull = calcularVidaRestanteWeibull(s.tAcumulado, eta, beta, umbral);
+                benchmarkWeibull = `
+                <br><span class="benchmark-text">Benchmark Weibull (referencia):</span><br>
+                <span class="benchmark-text">→ Confiabilidad: \( {R_weibullPct}% (β= \){beta.toFixed(2)}, η=${eta.toFixed(0)})</span><br>
+                <span class="benchmark-text">→ Vida restante teórica Weibull: ${vidaRestWeibull}</span>`;
+            } else {
+                benchmarkWeibull = `<br><span class="benchmark-text">Benchmark Weibull: parámetros inválidos</span>`;
+            }
+        }
+
+        let hrTxt = (typeof horasRestantes === 'number') ? horasRestantes.toFixed(1) + " h" : horasRestantes;
+        let advert = (s.D >= umbral) ? '<span class="alert"> → AGOTADO / SOBREDESGASTE</span>' : '';
+
+        salida += `
+        <div style="margin:8px 0;">
+            <b>\( {s.nombre}</b> \){advert}<br>
+            λ actual: ${lambdaActual.toExponential(6)}<br>
+            Vida restante (MIDF-MCF): ${hrTxt}<br>
+            D acumulado: ${s.D.toFixed(6)} / ${umbral}<br>
+            Confiabilidad MIDF-MCF: \( {confiabilidadPct} % \){benchmarkWeibull}<br>
+            t acumulado: ${s.tAcumulado.toFixed(2)} h
+        </div><hr>`;
+    });
+
+    document.getElementById("resultados").innerHTML = salida;
+    actualizarHistorial();
+    renderSubsistemas();
+    guardarLocal();
 }
+
+function calcularVidaRestanteWeibull(tActual, eta, beta, umbral){
+    if (beta <= 0 || eta <= 0) return "Inválido";
+    let R_crit = Math.exp(-umbral);  // Umbral de fallo conservador
+    let t_crit = eta * Math.pow(-Math.log(R_crit), 1 / beta);
+    let t_rest = t_crit - tActual;
+    return (t_rest > 0) ? t_rest.toFixed(1) + " h (ref)" : "0 h (ref)";
+}
+
+function actualizarHistorial(){
+    let sel = document.getElementById("historial");
+    sel.innerHTML = "";
+    historial.forEach((h,i) => {
+        let fechaTxt = h.fecha.toLocaleString('es-AR', {dateStyle:'short', timeStyle:'short'});
+        sel.innerHTML += `<option value="\( {i}"> \){h.subsistema} – ${fechaTxt}</option>`;
+    });
+}
+
+function verHistorial(){
+    let idx = document.getElementById("historial").value;
+    let h = historial[idx];
+    if(!h) return;
+
+    let hr = (typeof h.horasRestantes === 'number') ? h.horasRestantes.toFixed(1) + " h" : h.horasRestantes;
+    document.getElementById("detalleHistorial").innerHTML = `
+    Fecha: ${h.fecha.toLocaleString('es-AR')}<br>
+    Subsistema: ${h.subsistema}<br>
+    λ: ${h.lambda.toExponential(6)}<br>
+    D: ${h.D.toFixed(6)}<br>
+    Método integración: ${h.metodo}<br>
+    Vida restante MIDF-MCF: ${hr}<br>
+    Confiabilidad MIDF-MCF: ${h.confiabilidadPct} %<br>
+    t acumulado: ${h.tAcumulado.toFixed(2)} h`;
+}
+
+function exportarJSON(){
+    let data = { 
+        subsistemas, 
+        mcfExtras, 
+        historial: historial.map(h=>({...h, fecha:h.fecha.toISOString()})) 
+    };
+    let blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "midf_mcf_v8.2_data.json";
+    a.click();
+    guardarLocal();
+}
+
+function importarJSON(){
+    let input = document.createElement("input");
+    input.type = "file"; input.accept = ".json";
+    input.onchange = e => {
+        let file = e.target.files[0];
+        if(!file) return;
+        let reader = new FileReader();
+        reader.onload = ev => {
+            try {
+                let data = JSON.parse(ev.target.result);
+                subsistemas = data.subsistemas || [];
+                mcfExtras = data.mcfExtras || {};
+                historial = (data.historial || []).map(h => ({...h, fecha: new Date(h.fecha)}));
+                actualizarHistorial();
+                renderSubsistemas();
+                renderMCFExtras();
+                guardarLocal();
+                alert("Importación correcta");
+            } catch(err){
+                alert("JSON inválido:\n" + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+function guardarLocal(){
+    localStorage.setItem("midf_mcf_v8.2", JSON.stringify({
+        subsistemas,
+        mcfExtras,
+        historial: historial.map(h=>({...h, fecha:h.fecha.toISOString()}))
+    }));
+}
+
+function cargarLocal(){
+    let saved = localStorage.getItem("midf_mcf_v8.2");
+    if(!saved) return;
+    try {
+        let data = JSON.parse(saved);
+        subsistemas = data.subsistemas || [];
+        mcfExtras = data.mcfExtras || {};
+        historial = (data.historial || []).map(h => ({...h, fecha: new Date(h.fecha)}));
+        actualizarHistorial();
+        renderSubsistemas();
+        renderMCFExtras();
+    } catch(e){}
+}
+
+window.onload = cargarLocal;
 
 </script>
 </body>

@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>MIDF-MCF Firmware V3</title>
+<title>MIDF-MCF Firmware V4</title>
 <style>
 body { font-family: Arial; margin:20px; }
 input, select { margin:3px; }
@@ -15,23 +15,43 @@ button { margin:5px; }
 </head>
 <body>
 
-<h2>MIDF-MCF Degradation Engine V3</h2>
+<h2>MIDF-MCF Degradation Engine V4</h2>
+
+<h3>Configuración Global</h3>
 
 Fecha de medición:
 <input type="datetime-local" id="fecha" required>
 
-<h3>Método de integración</h3>
+<br><br>
+
+Modo de integración:
 <select id="modoIntegracion">
 <option value="promedio">Promedio lineal (Recomendado)</option>
 <option value="final">Conservador (λ final)</option>
 <option value="inicial">Histórico (λ inicial)</option>
 </select>
 
+<br><br>
+
+Umbral Amarillo:
+<input type="number" step="0.01" id="umbralAmarillo" value="0.7">
+
+Umbral Rojo:
+<input type="number" step="0.01" id="umbralRojo" value="1.0">
+
+Umbral de fallo técnico:
+<input type="number" step="0.01" id="umbralFallo" value="1.0">
+
+<hr>
+
 <div id="subsistemas"></div>
 
 <button onclick="agregarSubsistema()">Agregar Subsistema</button>
 <button onclick="calcular()">Calcular</button>
 <button onclick="exportarJSON()">Exportar JSON</button>
+<button onclick="importarJSON()">Importar JSON</button>
+
+<hr>
 
 <h3>Historial</h3>
 <select id="historial" onchange="verHistorial()"></select>
@@ -43,16 +63,13 @@ let subsistemas = []
 let historial = []
 
 function agregarSubsistema(){
-    let id = subsistemas.length
-
     subsistemas.push({
-        nombre: "Subsistema_"+id,
+        nombre: "Nuevo Subsistema",
         D: 0,
         lambdaAnterior: null,
         fechaAnterior: null,
         datosExtras: {}
     })
-
     render()
 }
 
@@ -60,26 +77,32 @@ function render(){
     let container = document.getElementById("subsistemas")
     container.innerHTML = ""
 
+    let umbralA = parseFloat(document.getElementById("umbralAmarillo").value) || 0.7
+    let umbralR = parseFloat(document.getElementById("umbralRojo").value) || 1.0
+
     subsistemas.forEach((sub,i)=>{
 
-        let color = "green"
-        if(sub.D >= 0.7 && sub.D < 1) color="yellow"
-        if(sub.D >= 1) color="red"
+        let color="green"
+        if(sub.D>=umbralA && sub.D<umbralR) color="yellow"
+        if(sub.D>=umbralR) color="red"
 
         container.innerHTML += `
         <div class="subsystem ${color}">
-        <b>${sub.nombre}</b><br>
+        <b>
+        <input type="text" value="${sub.nombre}" 
+        onchange="subsistemas[${i}].nombre=this.value; actualizarHistorial(); guardarLocal()">
+        </b><br>
 
-        L (Carga): <input type="number" step="0.01" id="L${i}">
-        E (Ambiente): <input type="number" step="0.01" id="E${i}">
-        G (Geometría): <input type="number" step="0.01" id="G${i}">
-        P (Proceso): <input type="number" step="0.01" id="P${i}">
-        S (Solar/UV si aplica): <input type="number" step="0.01" id="S${i}">
-        C (MCF): <input type="number" step="0.01" id="C${i}">
+        L:<input type="number" step="0.01" id="L${i}">
+        E:<input type="number" step="0.01" id="E${i}">
+        G:<input type="number" step="0.01" id="G${i}">
+        P:<input type="number" step="0.01" id="P${i}">
+        S:<input type="number" step="0.01" id="S${i}">
+        C:<input type="number" step="0.01" id="C${i}">
 
         <br><br>
-        Degradantes adicionales dinámicos:<br>
-        <input type="text" placeholder="Nombre variable" id="extraNombre${i}">
+        Variable adicional:
+        <input type="text" placeholder="Nombre" id="extraNombre${i}">
         <input type="number" step="0.01" placeholder="Valor" id="extraValor${i}">
         <button onclick="agregarExtra(${i})">Agregar</button>
 
@@ -89,124 +112,174 @@ function render(){
         D acumulado: ${sub.D.toFixed(4)}
         </div>
         `
+        renderExtras(i)
     })
 }
 
 function agregarExtra(i){
-    let nombre = document.getElementById("extraNombre"+i).value
-    let valor = parseFloat(document.getElementById("extraValor"+i).value)
-
-    if(!nombre || isNaN(valor)) return
-
-    subsistemas[i].datosExtras[nombre] = valor
+    let nombre=document.getElementById("extraNombre"+i).value
+    let valor=parseFloat(document.getElementById("extraValor"+i).value)
+    if(!nombre||isNaN(valor)) return
+    subsistemas[i].datosExtras[nombre]=valor
     renderExtras(i)
+    guardarLocal()
 }
 
 function renderExtras(i){
-    let div = document.getElementById("extras"+i)
-    div.innerHTML = ""
-
-    for(let key in subsistemas[i].datosExtras){
-        div.innerHTML += key + ": " + subsistemas[i].datosExtras[key] + "<br>"
+    let div=document.getElementById("extras"+i)
+    if(!div) return
+    div.innerHTML=""
+    for(let k in subsistemas[i].datosExtras){
+        div.innerHTML+=k+": "+subsistemas[i].datosExtras[k]+"<br>"
     }
 }
 
 function calcular(){
 
-    let fechaInput = document.getElementById("fecha").value
+    let fechaInput=document.getElementById("fecha").value
     if(!fechaInput){
-        alert("Debe ingresar fecha obligatoriamente")
+        alert("Debe ingresar fecha obligatoria")
         return
     }
 
-    let fechaActual = new Date(fechaInput)
-    let modo = document.getElementById("modoIntegracion").value
+    let fechaActual=new Date(fechaInput)
+    let modo=document.getElementById("modoIntegracion").value
+    let umbralFallo=parseFloat(document.getElementById("umbralFallo").value)||1.0
 
     subsistemas.forEach((sub,i)=>{
 
-        let L = parseFloat(document.getElementById("L"+i).value) || 1
-        let E = parseFloat(document.getElementById("E"+i).value) || 1
-        let G = parseFloat(document.getElementById("G"+i).value) || 1
-        let P = parseFloat(document.getElementById("P"+i).value) || 1
-        let S = parseFloat(document.getElementById("S"+i).value) || 1
-        let C = parseFloat(document.getElementById("C"+i).value) || 1
+        let L=parseFloat(document.getElementById("L"+i).value)||1
+        let E=parseFloat(document.getElementById("E"+i).value)||1
+        let G=parseFloat(document.getElementById("G"+i).value)||1
+        let P=parseFloat(document.getElementById("P"+i).value)||1
+        let S=parseFloat(document.getElementById("S"+i).value)||1
+        let C=parseFloat(document.getElementById("C"+i).value)||1
 
-        let lambdaActual = L*E*G*P*S*C
+        let lambdaActual=L*E*G*P*S*C
 
         if(sub.fechaAnterior){
-            let deltaH = (fechaActual - sub.fechaAnterior)/(1000*60*60)
+            let deltaH=(fechaActual-sub.fechaAnterior)/(1000*60*60)
+            let incremento=0
 
-            let incremento = 0
+            if(modo==="final") incremento=lambdaActual*deltaH
+            if(modo==="inicial"&&sub.lambdaAnterior)
+                incremento=sub.lambdaAnterior*deltaH
+            if(modo==="promedio"&&sub.lambdaAnterior)
+                incremento=((sub.lambdaAnterior+lambdaActual)/2)*deltaH
 
-            if(modo=="final"){
-                incremento = lambdaActual * deltaH
-            }
-
-            if(modo=="inicial" && sub.lambdaAnterior){
-                incremento = sub.lambdaAnterior * deltaH
-            }
-
-            if(modo=="promedio" && sub.lambdaAnterior){
-                incremento = ((sub.lambdaAnterior + lambdaActual)/2) * deltaH
-            }
-
-            sub.D += incremento
+            sub.D+=incremento
         }
 
-        sub.lambdaAnterior = lambdaActual
-        sub.fechaAnterior = fechaActual
+        sub.lambdaAnterior=lambdaActual
+        sub.fechaAnterior=fechaActual
 
-        // Calcular horas restantes
-        let horasRestantes = null
+        let horasRestantes="Estacionario"
         if(lambdaActual>0){
-            horasRestantes = (1 - sub.D)/lambdaActual
+            horasRestantes=((umbralFallo-sub.D)/lambdaActual)
         }
 
-        historial.push({
-            fecha: fechaActual,
-            subsistema: sub.nombre,
-            lambda: lambdaActual,
-            D: sub.D,
-            metodo: modo,
-            horasRestantes: horasRestantes
-        })
+        let clave=sub.nombre+"_"+fechaActual.toISOString()
+
+        let existente=historial.find(h=>h.clave===clave)
+
+        if(existente){
+            existente.lambda=lambdaActual
+            existente.D=sub.D
+            existente.metodo=modo
+            existente.horasRestantes=horasRestantes
+        }else{
+            historial.push({
+                clave:clave,
+                fecha:fechaActual,
+                subsistema:sub.nombre,
+                lambda:lambdaActual,
+                D:sub.D,
+                metodo:modo,
+                horasRestantes:horasRestantes
+            })
+        }
     })
 
     actualizarHistorial()
     render()
+    guardarLocal()
 }
 
 function actualizarHistorial(){
-    let select = document.getElementById("historial")
-    select.innerHTML = ""
-
+    let select=document.getElementById("historial")
+    select.innerHTML=""
     historial.forEach((h,i)=>{
-        select.innerHTML += `<option value="${i}">${h.subsistema} - ${h.fecha}</option>`
+        select.innerHTML+=`<option value="${i}">
+        ${h.subsistema} - ${new Date(h.fecha).toLocaleString()}
+        </option>`
     })
 }
 
 function verHistorial(){
-    let i = document.getElementById("historial").value
-    let h = historial[i]
+    let i=document.getElementById("historial").value
+    let h=historial[i]
+    if(!h) return
 
-    document.getElementById("detalleHistorial").innerHTML = `
-    Fecha: ${h.fecha}<br>
+    let horas=(typeof h.horasRestantes==="number")
+        ? h.horasRestantes.toFixed(2)
+        : h.horasRestantes
+
+    document.getElementById("detalleHistorial").innerHTML=`
+    Fecha: ${new Date(h.fecha).toLocaleString()}<br>
     Subsistema: ${h.subsistema}<br>
     Lambda: ${h.lambda.toFixed(4)}<br>
     D acumulado: ${h.D.toFixed(4)}<br>
     Método: ${h.metodo}<br>
-    Horas restantes estimadas: ${h.horasRestantes ? h.horasRestantes.toFixed(2) : "N/A"}
+    Horas restantes: ${horas}
     `
 }
 
 function exportarJSON(){
-    let data = JSON.stringify({subsistemas, historial})
-    let blob = new Blob([data], {type:"application/json"})
-    let a = document.createElement("a")
-    a.href = URL.createObjectURL(blob)
-    a.download = "midf_mcf_data.json"
+    let data=JSON.stringify({subsistemas, historial})
+    let blob=new Blob([data],{type:"application/json"})
+    let a=document.createElement("a")
+    a.href=URL.createObjectURL(blob)
+    a.download="midf_mcf_v4_data.json"
     a.click()
 }
+
+function importarJSON(){
+    let input=document.createElement("input")
+    input.type="file"
+    input.accept=".json"
+    input.onchange=e=>{
+        let file=e.target.files[0]
+        let reader=new FileReader()
+        reader.onload=ev=>{
+            let data=JSON.parse(ev.target.result)
+            subsistemas=data.subsistemas||[]
+            historial=data.historial||[]
+            actualizarHistorial()
+            render()
+            guardarLocal()
+        }
+        reader.readAsText(file)
+    }
+    input.click()
+}
+
+function guardarLocal(){
+    localStorage.setItem("midf_mcf_v4",
+        JSON.stringify({subsistemas, historial}))
+}
+
+function cargarLocal(){
+    let saved=localStorage.getItem("midf_mcf_v4")
+    if(saved){
+        let data=JSON.parse(saved)
+        subsistemas=data.subsistemas||[]
+        historial=data.historial||[]
+        actualizarHistorial()
+        render()
+    }
+}
+
+window.onload=cargarLocal
 
 </script>
 </body>

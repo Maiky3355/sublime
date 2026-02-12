@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>MIDF-MCF V9.3 – Motor Industrial Funcional</title>
+<title>MIDF-MCF V9.3 – Versión Funcional Corregida</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <style>
@@ -105,7 +105,7 @@ Agregar factor MCF adicional:<br>
 
 <script>
 // =============================================================================
-// MIDF-MCF v9.3 – Versión Corregida y 100% Funcional
+// MIDF-MCF v9.3 – Versión 100% Funcional y Corregida
 // Autor: Sebastián Héctor Manassero (@SebasSublime)
 // Todos los derechos reservados. © 2026 Sebastián Héctor Manassero
 // =============================================================================
@@ -144,7 +144,7 @@ function agregarActivo(){
 function agregarSubsistema(){
     let subs = activos[activoActual].subsistemas;
     subs.push({ 
-        nombre: "Nuevo subsistema", 
+        nombre: "Nuevo subsistema " + (subs.length + 1), 
         lambdaBase: 0, 
         vidaEstudio: 0,
         mostrarWeibull: false,
@@ -182,7 +182,7 @@ function renderSubsistemas(){
 
         container.innerHTML += `
         <div class="subsystem ${colorClass}">
-            <b>Nombre:</b> <input value="\( {s.nombre}" onchange="activos[' \){activoActual}'].subsistemas[${i}].nombre=this.value"><br><br>
+            <b>Nombre:</b> <input value="\( {s.nombre}" onchange="activos[' \){activoActual}'].subsistemas[${i}].nombre = this.value; renderSubsistemas();"><br><br>
 
             Vida estudio/teórica (h): <input type="number" id="vidaEstudio\( {i}" value=" \){s.vidaEstudio}" 
                                              onchange="activos['\( {activoActual}'].subsistemas[ \){i}].vidaEstudio = parseFloat(this.value) || 0"><br>
@@ -199,7 +199,7 @@ function renderSubsistemas(){
             </div><br>
 
             <label><input type="checkbox" id="weibullCheck${i}" ${s.mostrarWeibull ? 'checked' : ''} 
-                   onchange="activos['\( {activoActual}'].subsistemas[ \){i}].mostrarWeibull=this.checked; toggleWeibullFields(${i})">
+                   onchange="activos['\( {activoActual}'].subsistemas[ \){i}].mostrarWeibull = this.checked; renderSubsistemas();">
             Mostrar benchmark Weibull (referencia estadística)</label><br>
 
             <div id="weibullFields\( {i}" class="weibull-benchmark" style="display: \){weibullDisplay};">
@@ -304,32 +304,32 @@ function calcular(){
 
     let subs = activos[activoActual].subsistemas;
     subs.forEach((s, i) => {
-        let lambdaBaseSub = parseFloat(document.getElementById("lambdaBase"+i).value) || 0;
+        let lambdaBaseSub = parseFloat(document.getElementById("lambdaBase"+i)?.value) || 0;
         let lambdaBase = (lambdaBaseSub > 0) ? lambdaBaseSub : lambdaGlobal;
 
-        let vidaEstudio = parseFloat(document.getElementById("vidaEstudio"+i).value) || 0;
+        let vidaEstudio = parseFloat(document.getElementById("vidaEstudio"+i)?.value) || 0;
 
-        let modoCarga = document.getElementById("modoCarga"+i).value;
-        let cargaManual = (modoCarga === "manual") ? parseFloat(document.getElementById("cargaManual"+i).value) || 1.0 : NaN;
+        let modoCarga = document.getElementById("modoCarga"+i)?.value || "auto";
+        let cargaManual = (modoCarga === "manual") ? parseFloat(document.getElementById("cargaManual"+i)?.value) || 1.0 : NaN;
 
-        let cReal = parseFloat(document.getElementById("cReal"+i).value) || 1;
-        let cNom  = parseFloat(document.getElementById("cNom"+i).value)  || 1;
+        let cReal = parseFloat(document.getElementById("cReal"+i)?.value) || 1;
+        let cNom  = parseFloat(document.getElementById("cNom"+i)?.value)  || 1;
         if(cNom <= 0){ alert(`Carga nominal inválida en ${s.nombre}`); return; }
 
         let factorCarga = (modoCarga === "manual") ? cargaManual : (cReal / cNom);
 
-        let temp = parseFloat(document.getElementById("temp"+i).value) || 25;
-        let humedad = parseFloat(document.getElementById("humedad"+i).value) || 50;
-        let polvo = parseFloat(document.getElementById("polvo"+i).value) || 1;
-        let corrosion = parseFloat(document.getElementById("corrosion"+i).value) || 0;
+        let temp = parseFloat(document.getElementById("temp"+i)?.value) || 25;
+        let humedad = parseFloat(document.getElementById("humedad"+i)?.value) || 50;
+        let polvo = parseFloat(document.getElementById("polvo"+i)?.value) || 1;
+        let corrosion = parseFloat(document.getElementById("corrosion"+i)?.value) || 0;
 
         let factorClima = calcularFactorClimatico(temp, humedad, polvo, corrosion);
 
         let E = factorClima;
         let P  = 1;
-        let Gv = parseFloat(document.getElementById("Gv"+i).value) || 1;
-        let uvAplica = document.getElementById("uvCheck"+i).checked;
-        let UV = uvAplica ? (parseFloat(document.getElementById("UV"+i).value)||1) : 1;
+        let Gv = parseFloat(document.getElementById("Gv"+i)?.value) || 1;
+        let uvAplica = document.getElementById("uvCheck"+i)?.checked || false;
+        let UV = uvAplica ? (parseFloat(document.getElementById("UV"+i)?.value) || 1) : 1;
 
         let extrasTotal = Object.values(s.extras).reduce((a,b)=>a*b, 1);
 
@@ -361,7 +361,7 @@ function calcular(){
 
         if (s.D > 5) alert(`D > 5 en ${s.nombre} – revisar factores.`);
 
-        let horasRestantes = (s.D >= umbral) ? 0 : (lambdaActual > 1e-10 ? (umbral - s.D) / lambdaActual : "Estacionario");
+        let horasRestantes = (s.D >= umbral) ? 0 : (lambdaActual > 1e-10 ? (umbral - s.D) / lambdaActual : "Estacionario (λ ≈ 0)");
 
         let R_midf = Math.exp(-s.D);
         let confiabilidadPct = (R_midf * 100).toFixed(2);

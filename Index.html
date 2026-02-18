@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDF-MCF v3.0</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #f5f7fa; color: #333; }
+        
+        .header {
+            background: linear-gradient(135deg, #1a237e, #283593);
+            color: white;
+            padding: 20px 40px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 30px;
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        label { display: block; margin: 15px 0 5px; font-size: 13px; color: #666; }
+        input, select {
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;
+        }
+        button[type="submit"] {
+            width: 100%; margin-top: 20px; padding: 12px;
+            background: #3949ab; color: white; border: none; border-radius: 6px;
+            cursor: pointer;
+        }
+        button[type="submit"]:hover { background: #303f9f; }
+        
+        .btn-sec { background: #eceff1; border: none; padding: 8px 16px; 
+                   border-radius: 6px; margin-top: 10px; cursor: pointer; }
+        
+        /* Resultados */
+        .midf-card { margin-top: 0; }
+        .midf-header { display: flex; justify-content: space-between; align-items: center; 
+                       margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e8eaf6; }
+        .alerta { padding: 4px 12px; border-radius: 12px; font-size: 12px; text-transform: uppercase; }
+        .alerta-verde { background: #c8e6c9; color: #2e7d32; }
+        .alerta-amarillo { background: #fff9c4; color: #f57f17; }
+        .alerta-rojo { background: #ffcdd2; color: #c62828; }
+        .alerta-critico { background: #ff1744; color: white; }
+        
+        .midf-metricas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .metrica { text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+        .metrica .valor { font-size: 24px; font-weight: bold; color: #1a237e; }
+        .metrica .label { font-size: 11px; color: #78909c; margin-top: 5px; }
+        .barra { height: 6px; background: #e8eaf6; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+        .progreso { height: 100%; border-radius: 3px; }
+        
+        .midf-factores { margin-top: 20px; }
+        .midf-factores table { width: 100%; font-size: 13px; }
+        .midf-factores td { padding: 6px 0; border-bottom: 1px solid #eceff1; }
+        .midf-factores tr.total { font-weight: bold; color: #1a237e; }
+        
+        .midf-evento { margin-top: 15px; padding: 12px; background: #e8f5e9; 
+                       border-radius: 6px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MIDF-MCF System v3.0</h1>
+        <p>Manassero Internal Degradation Framework — Manassero Creation Framework</p>
+    </div>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>Ingreso de Datos</h2>
+            <form id="datosForm">
+                <p>Cargando configuración...</p>
+            </form>
+            <button class="btn-sec" id="btnBackup">💾 Backup</button>
+            <button class="btn-sec" id="btnSync">🔄 Sync</button>
+        </div>
+        
+        <div class="panel">
+            <div id="resultadoContainer">
+                <p style="color: #78909c; text-align: center; padding: 40px;">
+                    Ingrese datos y calcule para ver resultados
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/midf-mcf-core.js"></script>
+    <script src="js/midf-mcf-storage.js"></script>
+    <script src="js/midf-mcf-ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
